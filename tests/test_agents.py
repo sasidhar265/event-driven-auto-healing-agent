@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.services import FailureRouter, routed_agents, specialist_agents
+from app.services import routed_agents, specialist_agents
 
 
 def test_api_agent_recognizes_timeout():

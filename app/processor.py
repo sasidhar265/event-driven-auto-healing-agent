@@ -6,6 +6,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.art_lifecycle import LifecycleRecorder
 from app.models import (
     AuditLog, Event, EventStatus, Suggestion, SuggestionStatus,
     WebhookDelivery, WebhookSubscription,
@@ -29,10 +30,12 @@ async def process_event(session: AsyncSession, event_id: uuid.UUID) -> None:
 
     event.status = EventStatus.PROCESSING
     event.attempts += 1
+    lifecycle = LifecycleRecorder(session, event)
 
     try:
         evidence = await KnowledgeService().search(session, event)
         route, agents = routed_agents(event)
+        await lifecycle.start(route)
 
         _add_audit_log(
             session,
@@ -63,11 +66,13 @@ async def process_event(session: AsyncSession, event_id: uuid.UUID) -> None:
                 candidate,
                 evidence,
             )
+            await lifecycle.record_candidate(candidate, suggestion)
             await _queue_ready_webhooks(session, event, suggestion)
             suggestion_count += 1
 
         event.status = EventStatus.COMPLETED
         event.processed_at = datetime.now(UTC)
+        await lifecycle.complete()
 
         _add_audit_log(
             session,
@@ -79,6 +84,7 @@ async def process_event(session: AsyncSession, event_id: uuid.UUID) -> None:
     except Exception as exc:
         event.status = EventStatus.FAILED
         event.error = str(exc)[:2000]
+        await lifecycle.complete(failed=True, reason=event.error)
         raise
 
 

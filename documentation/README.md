@@ -134,7 +134,6 @@ deployment, rollback, and change-management systems authoritative.
 | Schema migrations | Alembic |
 | HTTP client | HTTPX |
 | Event backbone | Kafka-compatible broker through aiokafka |
-| Logging dependency | structlog |
 | Packaging | Hatchling |
 | Local orchestration | Make and Python virtual environment |
 | Testing | Pytest and pytest-asyncio |
@@ -189,7 +188,7 @@ Interactive OpenAPI documentation is available at:
 http://localhost:8000/docs
 ```
 
-### 7.1.1 Demonstration console
+### 7.1.1 Operations console
 
 The runtime serves a responsive browser console at:
 
@@ -211,9 +210,9 @@ contains:
 - Tenant audit history with JSON export.
 - Browser-local API connection settings.
 
-The presets demonstrate the quality of evidence expected from CI or an event
-backbone. They are editable, so operators can also paste representative
-failure payloads from their own systems.
+The incident profiles define the quality of evidence expected from CI or an
+event backbone. They are editable, so operators can paste representative
+pre-production failure payloads from their own systems.
 
 The console is a dependency-free HTML/CSS/JavaScript application under
 `app/static`. FastAPI serves it from the same origin as the API, avoiding a
@@ -1051,8 +1050,8 @@ its ready suggestion was published.
 | Method | Endpoint | Purpose |
 |---|---|---|
 | GET | `/health/live` | Liveness check |
-| GET | `/` | Redirect to the demonstration console |
-| GET | `/ui/` | Demonstration console |
+| GET | `/` | Redirect to the operations console |
+| GET | `/ui/` | Operations console |
 | GET | `/v1/overview` | Dashboard totals and recent events |
 | POST | `/v1/events` | Ingest a native event |
 | POST | `/v1/events/cloudevents` | Ingest CloudEvents 1.0 |

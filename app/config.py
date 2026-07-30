@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -8,6 +9,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     service_name: str = "auto-healing-agent-runtime"
+    api_profile: Literal["operations", "integration", "admin", "full"] = "operations"
     database_url: str = "postgresql+asyncpg://healing:healing@localhost:5432/healing"
     api_key: str = "change-me"
     worker_poll_seconds: float = 1.0

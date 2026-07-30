@@ -9,6 +9,8 @@ For moving the application to another machine or mapping existing PostgreSQL
 tables, see [the portability and integration guide](documentation/PORTABILITY.md).
 For database administration, reporting views, and the prepared query workbook,
 see [the pgAdmin 4 guide](documentation/PGADMIN.md).
+For the enterprise lifecycle requirements from `ART_Feedback.docx`, see the
+[requirement-to-implementation map](documentation/ART_FEEDBACK_IMPLEMENTATION.md).
 
 ## Runtime flow
 
@@ -44,9 +46,26 @@ make worker
 
 OpenAPI is at `http://127.0.0.1:8000/docs`. Requests require `X-API-Key`, `X-Tenant-Id`, and optionally `X-Actor`.
 
-The demonstration console is at `http://localhost:8000/ui/`. It includes ten
-interactive application and platform failure scenarios and shows their real
+The pre-production operations console is at `http://localhost:8000/ui/`. It
+provides ten operational incident profiles and shows their database-backed
 routing, agent suggestion, confidence, policy, and audit results.
+
+### API profiles
+
+The default `operations` profile exposes only the endpoints used by the
+operations console. Optional contracts remain available without expanding the
+normal runtime surface:
+
+| Profile | Start command | Exposed APIs |
+|---|---|---|
+| Operations | `make api` | ART incident intake, processing trace, suggestions, decisions, and audit |
+| Integration | `make api-integration` | Operations plus CloudEvents, subscriptions, and deliveries |
+| Admin | `make api-admin` | Operations plus internal KAI/governance management and detailed ART lifecycle administration |
+| Full | `make api-full` | All operations, integration, internal-service, and ART lifecycle APIs |
+
+Set `API_PROFILE` to `operations`, `integration`, `admin`, or `full` when
+starting the service in another environment. API paths and typed schemas remain
+unchanged whenever their profile is enabled.
 
 ### Run against local PostgreSQL
 
@@ -91,13 +110,17 @@ curl -X POST http://localhost:8000/v1/events \
   -d '{"external_id":"inc-42","event_type":"api.timeout","source":"apm","severity":"error","correlation_key":"orders-api","payload":{"endpoint":"/orders","timeout_ms":5000}}'
 ```
 
-Use `POST /v1/knowledge` for runbooks, `POST /v1/policies` for governance, `GET /v1/suggestions?event_id=...` for results, and `POST /v1/suggestions/{id}/decision` for a human decision. `GET /v1/audit` provides the tenant audit trail.
+The ART UI uses `GET /v1/suggestions?event_id=...` for results,
+`POST /v1/suggestions/{id}/decision` for a human decision, and `GET /v1/audit`
+for the tenant audit trail. KAI knowledge, governance policy, and remediation
+reference management are internal/admin APIs under `/v1/internal`.
 
 Human decisions are stored in `suggestion_decisions` and
 `remediation_references`. Accepted remediations are automatically retrieved as
 evidence for similar future failures; rejected suggestions remain recorded but
-are excluded from positive reference retrieval. Inspect them through
-`GET /v1/references` or the pgAdmin `art_reporting.reference_library` view.
+are excluded from positive reference retrieval. Administrators can inspect
+them through `GET /v1/internal/references` in the `admin` or `full` profile, or
+through the pgAdmin `art_reporting.reference_library` view.
 
 ## Direct event-system integration
 
@@ -140,3 +163,17 @@ Example policy rules:
 - Add pgvector for semantic knowledge retrieval when embeddings are approved.
 
 The service separates suggestions from execution so change-management, approval, rollback, and deployment systems remain authoritative.
+
+## Enterprise ART lifecycle API
+
+The document-driven enterprise model is exposed under `/v1/art`. It includes
+normalized failures, multi-agent runs and steps, explainability journals,
+impact/dependency analysis, test selection, governed execution intents,
+execution result references, self-heal proposals, outcome feedback, and
+event inbox/outbox resources.
+
+Every resource is tenant scoped and requires a correlation UUID and
+environment. Use the generated OpenAPI documentation for complete request
+schemas, or run the end-to-end verifier:
+
+Start `make api-full`, then run `make verify-art`.

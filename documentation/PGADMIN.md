@@ -59,6 +59,13 @@ The underlying history tables are:
 - `suggestion_decisions`
 - `remediation_references`
 
+The `art` schema contains the enterprise lifecycle requested in
+`ART_Feedback.docx`, including failure events, agent runs and steps, decision
+journals, impact records, test selection, execution intents/results,
+self-healing proposals, outcome feedback, and event inbox/outbox tables.
+Use `art.v_agent_run_summary` for workflow health and
+`art.v_correlation_trace` for end-to-end correlation.
+
 When a suggestion is accepted, ART activates its remediation reference. Similar
 future events retrieve that record as `accepted_remediation` evidence and
 increment its `use_count`. A rejected decision remains queryable but inactive.

@@ -11,4 +11,6 @@ PGPASSWORD="${ART_DATABASE_PASSWORD}" "${POSTGRES_APP_BIN}/psql" \
   -c "SELECT version();" \
   -c "SELECT version_num AS migration FROM alembic_version;" \
   -c "SELECT * FROM art_reporting.tenant_summary ORDER BY latest_event_at DESC NULLS LAST;" \
-  -c "SELECT event_type, outcome, active, use_count, decided_by, decided_at FROM art_reporting.reference_library ORDER BY decided_at DESC LIMIT 20;"
+  -c "SELECT event_type, outcome, active, use_count, decided_by, decided_at FROM art_reporting.reference_library ORDER BY decided_at DESC LIMIT 20;" \
+  -c "SELECT * FROM art.v_agent_run_summary ORDER BY started_at DESC NULLS LAST LIMIT 20;" \
+  -c "SELECT * FROM art.v_correlation_trace LIMIT 20;"
