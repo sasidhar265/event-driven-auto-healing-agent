@@ -1,0 +1,79 @@
+import hashlib
+import hmac
+import json
+from datetime import UTC, datetime, timedelta
+
+import httpx
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.config import get_settings
+from app.models import AuditLog, Suggestion, WebhookDelivery, WebhookSubscription
+
+
+def cloud_event(suggestion: Suggestion) -> dict:
+    return {
+        "specversion": "1.0", "id": str(suggestion.id),
+        "source": "/auto-healing-agent-runtime",
+        "type": "suggestion.ready", "subject": str(suggestion.event_id),
+        "time": suggestion.created_at.isoformat(), "datacontenttype": "application/json",
+        "tenantid": suggestion.tenant_id,
+        "data": {
+            "suggestion_id": str(suggestion.id), "event_id": str(suggestion.event_id),
+            "agent_type": suggestion.agent_type, "title": suggestion.title,
+            "rationale": suggestion.rationale, "proposed_changes": suggestion.proposed_changes,
+            "evidence": suggestion.evidence, "confidence": suggestion.confidence,
+            "policy_result": suggestion.policy_result, "status": suggestion.status.value,
+        },
+    }
+
+
+async def deliver_due(session: AsyncSession, limit: int = 20) -> int:
+    now = datetime.now(UTC)
+    deliveries = (await session.scalars(
+        select(WebhookDelivery).where(
+            WebhookDelivery.status.in_(["pending", "retry"]),
+            WebhookDelivery.next_attempt_at <= now,
+        ).order_by(WebhookDelivery.next_attempt_at).limit(limit).with_for_update(skip_locked=True)
+    )).all()
+    settings = get_settings()
+    for delivery in deliveries:
+        subscription = await session.get(WebhookSubscription, delivery.subscription_id)
+        suggestion = await session.get(Suggestion, delivery.suggestion_id)
+        if not subscription or not subscription.active or not suggestion:
+            delivery.status = "cancelled"
+            continue
+        payload = cloud_event(suggestion)
+        body = json.dumps(payload, separators=(",", ":"), default=str).encode()
+        secret = (subscription.secret or settings.webhook_signing_secret).encode()
+        signature = hmac.new(secret, body, hashlib.sha256).hexdigest()
+        delivery.attempts += 1
+        try:
+            async with httpx.AsyncClient(timeout=settings.webhook_timeout_seconds) as client:
+                response = await client.post(subscription.callback_url, content=body, headers={
+                    "Content-Type": "application/cloudevents+json",
+                    "Ce-Specversion": "1.0", "Ce-Type": "suggestion.ready",
+                    "Ce-Id": str(suggestion.id), "X-ART-Signature-256": f"sha256={signature}",
+                    "X-ART-Delivery": str(delivery.id),
+                })
+            delivery.response_status = response.status_code
+            response.raise_for_status()
+            delivery.status = "delivered"
+            delivery.delivered_at = now
+            delivery.last_error = None
+            action = "webhook.delivered"
+        except Exception as exc:
+            delivery.last_error = str(exc)[:2000]
+            if delivery.attempts >= settings.webhook_max_attempts:
+                delivery.status = "dead_letter"
+            else:
+                delivery.status = "retry"
+                delivery.next_attempt_at = now + timedelta(seconds=min(2 ** delivery.attempts, 3600))
+            action = f"webhook.{delivery.status}"
+        session.add(AuditLog(
+            tenant_id=delivery.tenant_id, actor="webhook-dispatcher", action=action,
+            resource_type="webhook_delivery", resource_id=str(delivery.id),
+            details={"attempt": delivery.attempts, "response_status": delivery.response_status,
+                     "suggestion_id": str(delivery.suggestion_id)},
+        ))
+    return len(deliveries)
