@@ -2,9 +2,66 @@
 
 Python 3.12/PostgreSQL reference implementation for governed enterprise remediation suggestions. It proposes changes; it intentionally does not execute production changes.
 
-For a detailed explanation of the architecture, runtime flow, agents, policies,
-API endpoints, database model, security, examples, limitations, and recommended
-improvements, see [the complete project guide](documentation/README.md).
+## Start here
+
+ART stands for **Auto-Healing Recommendation Tool** in this repository. An
+application, automated test, monitoring platform, or event backbone reports a
+failure. ART stores the incident, identifies its failure domain, selects a
+specialist, gathers evidence, calculates confidence, applies governance, and
+returns a proposed remediation. A person or an external change-management
+system remains responsible for applying the change.
+
+In plain language:
+
+```text
+Something fails
+      ↓
+ART receives and records the failure
+      ↓
+ART works out whether it is a UI, API, database, logic, or platform problem
+      ↓
+ART proposes a fix and explains its evidence
+      ↓
+Confidence and policy classify it as Suppressed, Review, or Ready
+      ↓
+An operator accepts or rejects the recommendation
+```
+
+The same records are visible in the browser and PostgreSQL. The UI is not
+showing hard-coded incident results: it creates and retrieves them through the
+API, and the API reads and writes PostgreSQL.
+
+Choose the documentation path that matches what you need:
+
+| Reader or goal | Start with |
+|---|---|
+| Non-technical overview | [Project walkthrough](documentation/PROJECT_WALKTHROUGH.md#1-what-this-project-does) |
+| Pictures and flow diagrams | [ART visual guide](documentation/VISUAL_GUIDE.md) |
+| Developer learning the code | [Code map](documentation/PROJECT_WALKTHROUGH.md#9-code-walkthrough) |
+| API or integration developer | [API guide](documentation/PROJECT_WALKTHROUGH.md#11-api-guide) |
+| Database administrator | [pgAdmin 4 guide](documentation/PGADMIN.md) |
+| Moving to another machine/environment | [Portability guide](documentation/PORTABILITY.md) |
+| Requirement traceability | [ART feedback implementation map](documentation/ART_FEEDBACK_IMPLEMENTATION.md) |
+| Deep implementation reference | [Technical reference](documentation/README.md) |
+
+## What you can do in the UI
+
+The console at `http://127.0.0.1:8000/ui/` has four ART-focused areas:
+
+| Screen | Purpose |
+|---|---|
+| Overview | See event totals, recent incidents, environment-filtered activity, and the live confidence Decision Model. |
+| Incident intake | Submit structured UI, API, logic, database, security, performance, and other failures. |
+| Suggestions | Read proposed remediations, confidence and evidence; accept or reject a suggestion. |
+| Audit trail | Trace database-backed actions by environment, time range, correlation ID, and failure ID. |
+
+Policy Governance and Knowledge/AI services are internal layers. They influence
+classification and recommendations but are not exposed as primary ART screens.
+
+For a detailed explanation of the architecture, data flow, terminology, UI,
+APIs, PostgreSQL tables, code organization, testing, troubleshooting, and
+maintenance, see the
+[complete project walkthrough](documentation/PROJECT_WALKTHROUGH.md).
 For moving the application to another machine or mapping existing PostgreSQL
 tables, see [the portability and integration guide](documentation/PORTABILITY.md).
 For database administration, reporting views, and the prepared query workbook,

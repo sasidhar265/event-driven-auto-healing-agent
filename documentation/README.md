@@ -1,5 +1,10 @@
 # Event-Driven Auto-Healing Suggestion Agent Runtime
 
+> This file is the deep implementation reference. For the current
+> reader-friendly explanation, UI behavior, code map, API profiles, operations,
+> and maintenance workflow, start with
+> [PROJECT_WALKTHROUGH.md](PROJECT_WALKTHROUGH.md).
+
 ## 1. Project overview
 
 This project is a reference implementation of a governed, event-driven
@@ -205,8 +210,6 @@ contains:
 - Live polling while the worker classifies and processes a failure.
 - Routing evidence, selected specialist, confidence, and proposed changes.
 - Suggestion acceptance and rejection.
-- Knowledge/runbook creation.
-- Governance policy creation.
 - Tenant audit history with JSON export.
 - Browser-local API connection settings.
 
@@ -392,7 +395,7 @@ Knowledge items represent internal material such as:
 Knowledge can be created with:
 
 ```text
-POST /v1/knowledge
+POST /v1/internal/knowledge
 ```
 
 Example:
@@ -492,8 +495,9 @@ Most included agents match known signals in the event type and payload.
 | Security | authorization, certificate, permission, CVE | `propose_security_change` |
 | Performance | latency, p95/p99, profile, bottleneck | `propose_performance_change` |
 
-The same event may match more than one agent. Each matching agent can generate
-its own suggestion.
+Several domains may receive non-zero routing scores, but the runtime selects the
+strongest specialist path. Ambiguous evidence routes to investigation instead
+of broadcasting the event to several agents and returning conflicting fixes.
 
 The general confidence formula begins at `0.62` and adds:
 
@@ -654,7 +658,7 @@ CONFIDENCE_DELIVERY_THRESHOLD=0.80
 Policies belong to a tenant and are created with:
 
 ```text
-POST /v1/policies
+POST /v1/internal/policies
 ```
 
 Example:
@@ -1060,12 +1064,12 @@ its ready suggestion was published.
 | GET | `/v1/suggestions` | List recent tenant suggestions |
 | GET | `/v1/suggestions?event_id={id}` | List suggestions for one event |
 | POST | `/v1/suggestions/{id}/decision` | Accept or reject a suggestion |
-| GET | `/v1/references` | List active reusable remediation references |
-| GET | `/v1/references?active_only=false` | List accepted and rejected references |
-| POST | `/v1/policies` | Create a tenant policy |
-| GET | `/v1/policies` | List tenant policies |
-| POST | `/v1/knowledge` | Create a knowledge item |
-| GET | `/v1/knowledge` | List tenant knowledge items |
+| GET | `/v1/internal/references` | List reusable remediation references (admin/full profile) |
+| GET | `/v1/internal/references?active_only=false` | List accepted and rejected references (admin/full profile) |
+| POST | `/v1/internal/policies` | Create a tenant policy (admin/full profile) |
+| GET | `/v1/internal/policies` | List tenant policies (admin/full profile) |
+| POST | `/v1/internal/knowledge` | Create a knowledge item (admin/full profile) |
+| GET | `/v1/internal/knowledge` | List tenant knowledge items (admin/full profile) |
 | POST | `/v1/subscriptions` | Create a webhook subscription |
 | GET | `/v1/subscriptions` | List webhook subscriptions |
 | DELETE | `/v1/subscriptions/{id}` | Deactivate a subscription |
@@ -1182,7 +1186,7 @@ This starts:
 ### Step 2: Add knowledge
 
 ```bash
-curl -X POST http://localhost:8000/v1/knowledge \
+curl -X POST http://localhost:8000/v1/internal/knowledge \
   -H 'Content-Type: application/json' \
   -H 'X-API-Key: change-me' \
   -H 'X-Tenant-Id: acme' \
@@ -1198,7 +1202,7 @@ curl -X POST http://localhost:8000/v1/knowledge \
 ### Step 3: Add a policy
 
 ```bash
-curl -X POST http://localhost:8000/v1/policies \
+curl -X POST http://localhost:8000/v1/internal/policies \
   -H 'Content-Type: application/json' \
   -H 'X-API-Key: change-me' \
   -H 'X-Tenant-Id: acme' \
@@ -1300,32 +1304,26 @@ replaced before using the runtime outside a local environment.
 
 ## 26. Current tests
 
-The included unit tests verify that:
+The automated suite covers:
 
-1. The API agent recognizes an API timeout and proposes an API change.
-2. All agents abstain for an unrelated capacity event.
-3. The XPath agent prefers a unique `data-testid` locator.
-4. UI XPath failures route only to the XPath specialist.
-5. Structured API failures route to an API file/method plan.
-6. Ambiguous failures route to evidence collection.
-7. Structured and binary Kafka CloudEvents are decoded.
-8. Tenantless backbone events are rejected.
-9. Dead-letter records preserve arbitrary original message bytes.
+1. Failure routing, specialist selection, safe abstention, and XPath locator
+   recommendations.
+2. Worker processing, suggestion creation, confidence states, webhook
+   selection, retry, and cancellation behavior.
+3. Native event and CloudEvent ingestion, idempotency, tenant validation, and
+   human decisions.
+4. Accepted/rejected remediation-reference behavior.
+5. Structured and binary Kafka CloudEvent decoding and dead-letter handling.
+6. Generic external PostgreSQL bridge mapping.
+7. Enterprise ART lifecycle creation, transitions, correlations, and API
+   contracts.
+8. API-profile inventories and unique operation identifiers.
+9. ART UI workflows, Bootstrap control consistency, modal details, audit
+   filters, pop-up calendars, Decision Model records, and connection details.
 
-These tests validate useful agent behavior, but they do not yet cover:
-
-- API authentication.
-- Event ingestion idempotency.
-- Live Kafka broker consumption and offset recovery.
-- Database persistence.
-- Worker processing.
-- Policy combinations.
-- AI gateway failures.
-- Webhook signing.
-- Retry and dead-letter behavior.
-- Tenant isolation.
-- Human decisions.
-- Full end-to-end operation.
+Run `make test` for the suite and `make coverage` for the line-coverage report.
+Live broker recovery, browser end-to-end automation, production identity
+providers, and production-scale load remain environment-level test concerns.
 
 ## 27. Current limitations
 
@@ -1342,21 +1340,25 @@ appropriate specialist more reliably, but classification alone cannot prove a
 root cause. Correct file-level changes still depend on accurate stack traces,
 source/test locations, logs, traces, expected/actual values, and validation.
 
-### Event correlation is not implemented
+### Correlation is traceable but not an incident-aggregation engine
 
-The event model stores and indexes `correlation_key`, but the processor does not
-currently group multiple events into a shared incident or use historical
-correlated events during analysis.
+The event model stores and indexes `correlation_key`. The Audit Trail supports
+correlation search, and the enterprise lifecycle API can retrieve a normalized
+correlation view. The operational processor does not yet merge several events
+into one automatically managed incident or use a full correlated history as
+agent evidence.
 
 ### Knowledge search is lexical
 
 Only title and tag word overlap is scored. Knowledge content is returned as
 evidence but is not semantically searched.
 
-### No user interface
+### The UI is an operations console, not a full administration portal
 
-The runtime provides REST APIs and OpenAPI documentation, but no operator
-dashboard.
+The responsive ART console covers overview, incident intake, suggestions,
+confidence decisions, connection details, and audit traceability. Knowledge,
+policy, and enterprise lifecycle administration intentionally remain behind
+admin/internal APIs rather than being exposed as ART screens.
 
 ### Authentication is suitable mainly for a reference implementation
 
