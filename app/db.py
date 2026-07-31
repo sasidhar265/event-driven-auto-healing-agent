@@ -9,5 +9,6 @@ SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 
 async def get_session() -> AsyncIterator[AsyncSession]:
+    """Yield one request-scoped async PostgreSQL session and close it afterward."""
     async with SessionLocal() as session:
         yield session

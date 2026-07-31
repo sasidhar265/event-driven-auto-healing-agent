@@ -16,5 +16,5 @@ fi
 "${PGADMIN_PYTHON}" "${PGADMIN_SETUP}" load-servers "${SERVER_FILE}" \
   --sqlite-path "${PGADMIN_DATABASE}"
 
-echo "Registered ART - Postgres.app in pgAdmin 4."
+echo "Registered ART PostgreSQL in pgAdmin 4."
 echo "Passwords are not imported; enter the ART database password on first connection."

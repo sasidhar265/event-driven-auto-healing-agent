@@ -78,6 +78,7 @@ async def _upsert_decision(
     decision_request: DecisionCreate,
     principal: Principal,
 ) -> None:
+    """Create or update the single operator decision for a suggestion."""
     decision = await session.scalar(
         select(SuggestionDecision).where(
             SuggestionDecision.suggestion_id == suggestion.id
@@ -107,6 +108,7 @@ async def _upsert_reference(
     decision_request: DecisionCreate,
     principal: Principal,
 ) -> None:
+    """Synchronize reusable remediation learning with the latest decision."""
     reference = await session.scalar(
         select(RemediationReference).where(
             RemediationReference.suggestion_id == suggestion.id

@@ -17,6 +17,7 @@ from app.runtime_config import get_runtime_rules
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    """Release the shared PostgreSQL connection pool when FastAPI stops."""
     yield
     await engine.dispose()
 
@@ -45,10 +46,12 @@ def create_application(api_profile: str | None = None) -> FastAPI:
 
     @application.get("/", include_in_schema=False)
     async def root() -> RedirectResponse:
+        """Redirect the service root to the bundled operations console."""
         return RedirectResponse("/ui/")
 
     @application.get("/health/live")
     async def live() -> dict[str, object]:
+        """Report service configuration and verify PostgreSQL with a lightweight query."""
         settings = get_settings()
         database_url = make_url(settings.database_url)
         database_status = "connected"

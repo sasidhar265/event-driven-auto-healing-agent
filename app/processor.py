@@ -23,6 +23,11 @@ from app.services import (
 
 
 async def process_event(session: AsyncSession, event_id: uuid.UUID) -> None:
+    """Turn one locked event into governed suggestions and lifecycle records.
+
+    The caller owns the transaction. Completed or missing events are ignored;
+    processing failures mark the event failed and are re-raised for the worker.
+    """
     rules = get_runtime_rules()
     event = await session.scalar(
         select(Event).where(Event.id == event_id).with_for_update()
@@ -98,6 +103,7 @@ async def _create_suggestion(
     candidate: Candidate,
     evidence: list[dict[str, Any]],
 ) -> Suggestion:
+    """Apply policy/confidence and persist a suggestion with its audit record."""
     status, policy_result, confidence = await PolicyEngine().evaluate(
         session,
         event,
@@ -140,6 +146,7 @@ async def _queue_ready_webhooks(
     event: Event,
     suggestion: Suggestion,
 ) -> None:
+    """Queue deliveries for active subscriptions that accept ready suggestions."""
     ready_event_type = get_runtime_rules().delivery.cloud_event_type
     if suggestion.status != SuggestionStatus.READY:
         return
@@ -176,6 +183,7 @@ def _add_audit_log(
     action: str,
     details: dict[str, Any],
 ) -> None:
+    """Stage an event-level audit record in the caller's transaction."""
     session.add(
         AuditLog(
             tenant_id=event.tenant_id,

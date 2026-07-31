@@ -490,7 +490,7 @@ http://127.0.0.1:8000/docs
 ```bash
 cp .env.example .env
 make setup
-make postgres-app-setup
+make db-setup
 make migrate
 ```
 
@@ -649,7 +649,7 @@ current state.
 
 - Confirm the PostgreSQL application is running.
 - Verify host, port, database, and user in `DATABASE_URL`.
-- Run `make postgres-app-inspect`.
+- Run `make db-inspect`.
 - Use the Connection popup for the safe runtime view.
 
 ### API returns 401 or 422

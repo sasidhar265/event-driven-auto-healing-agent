@@ -58,6 +58,7 @@ class FailureEventCreate(ArtCreate):
 
     @model_validator(mode="after")
     def require_external_payload_reference(self):
+        """Require an external reference when diagnostic payloads exceed limits."""
         if self.payload_summary and not (
             self.payload_ref or self.raw_failure_ref or self.artifact_refs
         ):
@@ -208,6 +209,7 @@ class ExecutionIntentCreate(ArtCreate):
 
     @model_validator(mode="after")
     def require_governance_for_dispatchable_intent(self):
+        """Require governance evidence before an intent can be dispatched."""
         if self.approval_required and self.approval_status == "NOT_REQUIRED":
             raise ValueError("approval_required intents must use PENDING approval_status")
         if self.status in {"APPROVED", "EXECUTED"} and not self.policy_decision_id:

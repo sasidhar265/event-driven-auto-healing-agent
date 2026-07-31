@@ -32,6 +32,7 @@ def correlation_uuid(event: Event) -> uuid.UUID:
 
 
 def event_environment(event: Event) -> str:
+    """Return a supported lifecycle environment from the event payload."""
     config = get_runtime_rules().lifecycle
     value = str(
         event.payload.get("environment", config.default_environment)
@@ -40,7 +41,10 @@ def event_environment(event: Event) -> str:
 
 
 class LifecycleRecorder:
+    """Mirror normal processing into governed enterprise lifecycle records."""
+
     def __init__(self, session: AsyncSession, event: Event):
+        """Attach the recorder to the caller's transaction and source event."""
         self.session = session
         self.event = event
         self.correlation_id = correlation_uuid(event)
@@ -50,6 +54,7 @@ class LifecycleRecorder:
         self.step_sequence = 0
 
     async def start(self, route: FailureRoute) -> None:
+        """Create the failure, agent run, and initial classification step."""
         config = get_runtime_rules().lifecycle
         payload = self.event.payload
         self.failure = FailureEvent(
@@ -104,6 +109,7 @@ class LifecycleRecorder:
         candidate: Candidate,
         suggestion: Suggestion,
     ) -> None:
+        """Record an agent decision and its optional self-heal proposal."""
         config = get_runtime_rules().lifecycle
         if self.run is None:
             return
@@ -156,6 +162,7 @@ class LifecycleRecorder:
             )
 
     async def complete(self, *, failed: bool = False, reason: str | None = None) -> None:
+        """Close a started lifecycle run as successful or failed."""
         if self.run is None:
             return
         completed_at = datetime.now(UTC)
@@ -176,6 +183,7 @@ class LifecycleRecorder:
         confidence_reason: str | None = None,
         output_ref: str | None = None,
     ) -> AgentRunStep:
+        """Append one auditable processing step to the active agent run."""
         self.step_sequence += 1
         now = datetime.now(UTC)
         step = AgentRunStep(

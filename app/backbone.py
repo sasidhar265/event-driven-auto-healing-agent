@@ -15,11 +15,13 @@ from app.security import Principal
 
 @dataclass(frozen=True)
 class BackboneEnvelope:
+    """Normalized Kafka message containing event data and tenant identity."""
     cloud_event: dict[str, Any]
     principal: Principal
 
 
 def _headers(values: list[tuple[str, bytes | None]] | None) -> dict[str, str]:
+    """Decode Kafka byte headers into a case-normalized string mapping."""
     return {
         key.lower(): value.decode("utf-8")
         for key, value in (values or [])
@@ -99,6 +101,7 @@ def dead_letter_record(
 
 
 def _kafka_security(settings: Any) -> dict[str, Any]:
+    """Build optional SASL connection arguments from application settings."""
     options: dict[str, Any] = {"security_protocol": settings.kafka_security_protocol}
     if settings.kafka_sasl_mechanism:
         options.update({
@@ -110,6 +113,7 @@ def _kafka_security(settings: Any) -> dict[str, Any]:
 
 
 async def run() -> None:
+    """Consume Kafka CloudEvents, persist valid events, and dead-letter failures."""
     # Imported lazily so the HTTP/database runtime can operate without loading a
     # Kafka client when the optional backbone process is not used.
     from aiokafka import AIOKafkaConsumer, AIOKafkaProducer, TopicPartition
@@ -160,6 +164,7 @@ async def run() -> None:
 
 
 async def main() -> None:
+    """Run the event-backbone consumer and release database resources."""
     from app.db import engine
 
     try:

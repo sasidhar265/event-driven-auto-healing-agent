@@ -15,6 +15,7 @@ HEADERS = {
 
 
 def create(client: httpx.Client, resource: str, payload: dict) -> dict:
+    """POST one lifecycle resource and return its validated JSON response."""
     response = client.post(f"/v1/art/{resource}", json=payload)
     response.raise_for_status()
     record = response.json()
@@ -23,6 +24,7 @@ def create(client: httpx.Client, resource: str, payload: dict) -> dict:
 
 
 def main() -> int:
+    """Create a correlated lifecycle chain to verify the running ART API."""
     correlation_id = str(uuid.uuid4())
     common = {"correlation_id": correlation_id, "environment": "test"}
 

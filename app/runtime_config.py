@@ -29,6 +29,7 @@ class RoutingConfig(BaseModel):
 
     @model_validator(mode="after")
     def categories_match(self):
+        """Ensure configured category weights match declared routing categories."""
         if set(self.signals) != set(self.structured_hints):
             raise ValueError("routing signal and structured-hint categories must match")
         return self
@@ -78,6 +79,7 @@ class XPathConfig(BaseModel):
 
     @model_validator(mode="after")
     def validate_templates(self):
+        """Validate XPath templates and their required placeholders."""
         self.replacement_rationale.format(strategy="css-selector", unique_suffix="")
         return self
 
@@ -91,6 +93,7 @@ class InvestigationConfig(BaseModel):
 
     @model_validator(mode="after")
     def validate_templates(self):
+        """Validate evidence-request templates and their placeholders."""
         self.title_template.format(event_type="event.type")
         return self
 
@@ -112,6 +115,7 @@ class AgentConfig(BaseModel):
 
     @model_validator(mode="after")
     def validate_templates(self):
+        """Validate agent templates and their required placeholders."""
         self.title_template.format(agent_type="API", event_type="api.failure")
         self.rationale_template.format(matches="api", evidence_count=1)
         return self
@@ -157,6 +161,7 @@ class RuntimeRules(BaseModel):
 
     @model_validator(mode="after")
     def specialist_categories_match_routing(self):
+        """Ensure every routing category has matching specialist configuration."""
         if set(self.routing.signals) != set(self.agents.specialists):
             raise ValueError("routing and specialist categories must match")
         return self
@@ -164,6 +169,7 @@ class RuntimeRules(BaseModel):
 
 @lru_cache
 def get_runtime_rules() -> RuntimeRules:
+    """Load, validate, and cache the checked-in runtime rules document."""
     path = Path(get_settings().runtime_rules_path)
     if not path.is_absolute():
         path = Path(__file__).parents[1] / path

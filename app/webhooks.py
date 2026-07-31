@@ -13,6 +13,7 @@ from app.runtime_config import get_runtime_rules
 
 
 def cloud_event(suggestion: Suggestion) -> dict:
+    """Serialize a ready suggestion as the downstream CloudEvents payload."""
     delivery = get_runtime_rules().delivery
     return {
         "specversion": "1.0", "id": str(suggestion.id),
@@ -31,6 +32,7 @@ def cloud_event(suggestion: Suggestion) -> dict:
 
 
 async def deliver_due(session: AsyncSession, limit: int | None = None) -> int:
+    """Deliver eligible webhooks and record success, retry, or dead-letter state."""
     delivery_config = get_runtime_rules().delivery
     limit = limit or delivery_config.webhook_batch_size
     now = datetime.now(UTC)

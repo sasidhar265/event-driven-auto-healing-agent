@@ -32,6 +32,7 @@ async def persist_event(body: EventCreate, auth: Principal, session: AsyncSessio
 
 
 def cloud_event_to_event(body: CloudEventCreate) -> EventCreate:
+    """Convert a validated CloudEvent into ART's native incident contract."""
     return EventCreate(
         external_id=body.id,
         event_type=body.type,
@@ -53,5 +54,6 @@ def cloud_event_to_event(body: CloudEventCreate) -> EventCreate:
 async def persist_cloud_event(
     raw: dict[str, Any], auth: Principal, session: AsyncSession
 ) -> Event:
+    """Validate raw CloudEvent data and persist it through normal event intake."""
     body = CloudEventCreate.model_validate(raw)
     return await persist_event(cloud_event_to_event(body), auth, session)

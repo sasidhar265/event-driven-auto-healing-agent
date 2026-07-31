@@ -106,7 +106,7 @@ Apply and inspect the database:
 
 ```bash
 make migrate
-make postgres-app-inspect
+make db-inspect
 ```
 
 Run the API and exercise all resources:

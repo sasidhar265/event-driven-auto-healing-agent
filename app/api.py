@@ -28,16 +28,19 @@ api_settings = get_settings()
 
 @operations_router.post("/events", response_model=EventRead, status_code=status.HTTP_202_ACCEPTED)
 async def ingest_event(body: EventCreate, auth: Principal = Depends(principal), session: AsyncSession = Depends(get_session)):
+    """Accept a native incident and atomically queue it for worker processing."""
     return await persist_event(body, auth, session)
 
 
 @integration_router.post("/events/cloudevents", response_model=EventRead, status_code=status.HTTP_202_ACCEPTED)
 async def ingest_cloud_event(body: CloudEventCreate, auth: Principal = Depends(principal), session: AsyncSession = Depends(get_session)):
+    """Accept a CloudEvents 1.0 incident through the optional integration API."""
     return await persist_event(cloud_event_to_event(body), auth, session)
 
 
 @operations_router.get("/events/{event_id}", response_model=EventRead)
 async def get_event(event_id: uuid.UUID, auth: Principal = Depends(principal), session: AsyncSession = Depends(get_session)):
+    """Return one event only when it belongs to the authenticated tenant."""
     event = await session.scalar(select(Event).where(Event.id == event_id, Event.tenant_id == auth.tenant_id))
     if not event:
         raise HTTPException(404, "Event not found")
@@ -246,6 +249,7 @@ async def list_events(
     auth: Principal = Depends(principal),
     session: AsyncSession = Depends(get_session),
 ):
+    """List the authenticated tenant's newest events up to the validated limit."""
     return list((await session.scalars(
         select(Event).where(Event.tenant_id == auth.tenant_id)
         .order_by(Event.created_at.desc()).limit(limit)
@@ -258,7 +262,9 @@ async def overview(
     auth: Principal = Depends(principal),
     session: AsyncSession = Depends(get_session),
 ):
+    """Build event, suggestion, confidence, and delivery metrics for the UI."""
     async def count(model, *criteria) -> int:
+        """Count tenant rows for a model with optional additional predicates."""
         return int(await session.scalar(
             select(func.count()).select_from(model).where(
                 model.tenant_id == auth.tenant_id, *criteria
@@ -371,6 +377,7 @@ async def overview(
 
 @operations_router.get("/suggestions", response_model=list[SuggestionRead])
 async def list_suggestions(event_id: uuid.UUID | None = None, auth: Principal = Depends(principal), session: AsyncSession = Depends(get_session)):
+    """List tenant suggestions, optionally restricted to one source event."""
     query = select(Suggestion).where(Suggestion.tenant_id == auth.tenant_id).order_by(Suggestion.created_at.desc())
     if event_id:
         query = query.where(Suggestion.event_id == event_id)
@@ -383,6 +390,7 @@ async def list_suggestions(event_id: uuid.UUID | None = None, auth: Principal = 
 
 @operations_router.post("/suggestions/{suggestion_id}/decision", response_model=SuggestionRead)
 async def decide(suggestion_id: uuid.UUID, body: DecisionCreate, auth: Principal = Depends(principal), session: AsyncSession = Depends(get_session)):
+    """Accept or reject a locked suggestion and update reusable learning records."""
     item = await session.scalar(
         select(Suggestion)
         .where(
@@ -415,6 +423,7 @@ async def list_references(
     auth: Principal = Depends(principal),
     session: AsyncSession = Depends(get_session),
 ):
+    """List reusable remediation references for internal administrators."""
     query = select(RemediationReference).where(
         RemediationReference.tenant_id == auth.tenant_id
     )
@@ -442,6 +451,7 @@ async def list_references(
 
 @internal_router.post("/policies", status_code=201)
 async def create_policy(body: PolicyCreate, auth: Principal = Depends(principal), session: AsyncSession = Depends(get_session)):
+    """Create a tenant governance policy through the internal API."""
     policy = Policy(tenant_id=auth.tenant_id, **body.model_dump())
     session.add(policy)
     await session.commit()
@@ -453,6 +463,7 @@ async def list_policies(
     auth: Principal = Depends(principal),
     session: AsyncSession = Depends(get_session),
 ):
+    """List the tenant's governance policies, newest first."""
     rows = (await session.scalars(
         select(Policy).where(Policy.tenant_id == auth.tenant_id)
         .order_by(Policy.created_at.desc()).limit(api_settings.api_admin_limit)
@@ -468,6 +479,7 @@ async def list_policies(
 
 @internal_router.post("/knowledge", status_code=201)
 async def create_knowledge(body: KnowledgeCreate, auth: Principal = Depends(principal), session: AsyncSession = Depends(get_session)):
+    """Create a tenant knowledge item used during evidence retrieval."""
     data = body.model_dump()
     metadata = data.pop("metadata")
     item = KnowledgeItem(tenant_id=auth.tenant_id, metadata_=metadata, **data)
@@ -481,6 +493,7 @@ async def list_knowledge(
     auth: Principal = Depends(principal),
     session: AsyncSession = Depends(get_session),
 ):
+    """List knowledge items available to the authenticated tenant."""
     rows = (await session.scalars(
         select(KnowledgeItem).where(KnowledgeItem.tenant_id == auth.tenant_id)
         .order_by(KnowledgeItem.created_at.desc())
@@ -497,6 +510,7 @@ async def list_knowledge(
 
 @integration_router.post("/subscriptions", response_model=SubscriptionRead, status_code=201)
 async def create_subscription(body: SubscriptionCreate, auth: Principal = Depends(principal), session: AsyncSession = Depends(get_session)):
+    """Register and audit a tenant webhook subscription."""
     item = WebhookSubscription(tenant_id=auth.tenant_id, **body.model_dump())
     session.add(item)
     await session.flush()
@@ -508,6 +522,7 @@ async def create_subscription(body: SubscriptionCreate, auth: Principal = Depend
 
 @integration_router.get("/subscriptions", response_model=list[SubscriptionRead])
 async def list_subscriptions(auth: Principal = Depends(principal), session: AsyncSession = Depends(get_session)):
+    """List all webhook subscriptions owned by the tenant."""
     return list((await session.scalars(select(WebhookSubscription).where(
         WebhookSubscription.tenant_id == auth.tenant_id
     ).order_by(WebhookSubscription.created_at.desc()))).all())
@@ -515,6 +530,7 @@ async def list_subscriptions(auth: Principal = Depends(principal), session: Asyn
 
 @integration_router.delete("/subscriptions/{subscription_id}", status_code=204)
 async def deactivate_subscription(subscription_id: uuid.UUID, auth: Principal = Depends(principal), session: AsyncSession = Depends(get_session)):
+    """Deactivate and audit a tenant webhook subscription without deleting it."""
     item = await session.scalar(select(WebhookSubscription).where(
         WebhookSubscription.id == subscription_id, WebhookSubscription.tenant_id == auth.tenant_id
     ).with_for_update())
@@ -527,6 +543,7 @@ async def deactivate_subscription(subscription_id: uuid.UUID, auth: Principal = 
 
 @integration_router.get("/deliveries")
 async def list_deliveries(suggestion_id: uuid.UUID | None = None, auth: Principal = Depends(principal), session: AsyncSession = Depends(get_session)):
+    """List tenant webhook attempts, optionally for one suggestion."""
     query = select(WebhookDelivery).where(WebhookDelivery.tenant_id == auth.tenant_id)
     if suggestion_id:
         query = query.where(WebhookDelivery.suggestion_id == suggestion_id)
@@ -544,6 +561,7 @@ async def list_deliveries(suggestion_id: uuid.UUID | None = None, auth: Principa
 
 @integration_router.post("/deliveries/{delivery_id}/retry", status_code=202)
 async def retry_delivery(delivery_id: uuid.UUID, auth: Principal = Depends(principal), session: AsyncSession = Depends(get_session)):
+    """Make a failed tenant webhook delivery immediately eligible for retry."""
     item = await session.scalar(select(WebhookDelivery).where(
         WebhookDelivery.id == delivery_id, WebhookDelivery.tenant_id == auth.tenant_id
     ).with_for_update())
@@ -570,6 +588,7 @@ async def audit(
     auth: Principal = Depends(principal),
     session: AsyncSession = Depends(get_session),
 ):
+    """Search tenant audit history by time, environment, or correlation ID."""
     query = select(AuditLog).where(AuditLog.tenant_id == auth.tenant_id)
     if from_time:
         query = query.where(AuditLog.created_at >= from_time)

@@ -47,6 +47,7 @@ class ArtRepository:
     """Read and write tenant-scoped ART lifecycle records."""
 
     def __init__(self, session: AsyncSession, principal: Principal):
+        """Bind repository operations to one transaction and tenant principal."""
         self.session = session
         self.principal = principal
 
@@ -55,6 +56,7 @@ class ArtRepository:
         model: type[ArtModel],
         body: BaseModel,
     ) -> ArtResourceResponse:
+        """Validate, persist, audit, and return one lifecycle resource."""
         await self._validate_parent_references(body)
 
         record = model(
@@ -85,6 +87,7 @@ class ArtRepository:
         environment: str | None,
         limit: int,
     ) -> list[ArtResourceResponse]:
+        """List tenant resources with optional correlation/environment filters."""
         query = select(model).where(model.tenant_id == self.principal.tenant_id)
         if correlation_id is not None:
             query = query.where(model.correlation_id == correlation_id)
@@ -100,6 +103,7 @@ class ArtRepository:
         model: type[ArtModel],
         record_id: uuid.UUID,
     ) -> ArtResourceResponse:
+        """Return one tenant-owned lifecycle resource or raise HTTP 404."""
         return self._as_response(await self._find(model, record_id))
 
     async def change_state(
@@ -108,6 +112,7 @@ class ArtRepository:
         record_id: uuid.UUID,
         update: LifecycleStateUpdate,
     ) -> ArtResourceResponse:
+        """Apply and audit a valid lifecycle state change."""
         record = await self._find(model, record_id)
         changes = update.model_dump(exclude_none=True)
         requested_status = changes.pop("status")
@@ -143,6 +148,7 @@ class ArtRepository:
         return self._as_response(record)
 
     async def correlation_trace(self, correlation_id: uuid.UUID) -> dict[str, Any]:
+        """Read the tenant-scoped lifecycle reporting view for a correlation ID."""
         result = await self.session.execute(
             text("""
                 SELECT *
@@ -166,6 +172,7 @@ class ArtRepository:
         model: type[ArtModel],
         record_id: uuid.UUID,
     ) -> ArtModel:
+        """Find one tenant-owned model instance or raise HTTP 404."""
         record = await self.session.scalar(
             select(model).where(
                 model.id == record_id,
@@ -181,6 +188,7 @@ class ArtRepository:
         return record
 
     async def _validate_parent_references(self, body: BaseModel) -> None:
+        """Ensure every supplied lifecycle parent belongs to this tenant."""
         for field, model in PARENT_REFERENCES:
             record_id = getattr(body, field, None)
             if record_id is not None:
@@ -193,6 +201,7 @@ class ArtRepository:
         action: str,
         details: dict[str, Any],
     ) -> None:
+        """Stage a lifecycle audit entry in the current transaction."""
         resource_name = f"art.{record.__tablename__}"
         self.session.add(
             AuditLog(
@@ -207,6 +216,7 @@ class ArtRepository:
 
     @staticmethod
     def _as_response(record: DeclarativeBase) -> ArtResourceResponse:
+        """Normalize any ART model into the common API response contract."""
         values = {
             column.key: getattr(record, column.key) for column in inspect(type(record)).columns
         }
@@ -231,6 +241,7 @@ class ArtRepository:
 
     @staticmethod
     def _status_field(record: DeclarativeBase) -> str:
+        """Return the model-specific lifecycle status attribute name."""
         for field in STATUS_FIELDS:
             if hasattr(record, field):
                 return field
@@ -238,6 +249,7 @@ class ArtRepository:
 
     @staticmethod
     def _status_of(record: DeclarativeBase) -> str:
+        """Return a normalized status string for any lifecycle record."""
         for field in STATUS_FIELDS:
             value = getattr(record, field, None)
             if value is not None:
@@ -246,6 +258,7 @@ class ArtRepository:
 
     @staticmethod
     def _timestamp_column(model: type[ArtModel]):
+        """Return the best model timestamp column for newest-first ordering."""
         for field in TIMESTAMP_FIELDS:
             column = getattr(model, field, None)
             if column is not None:

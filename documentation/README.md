@@ -1081,13 +1081,13 @@ its ready suggestion was published.
 
 ### Local PostgreSQL interaction mode
 
-The application runs entirely as local processes against Postgres.app. The
+The application runs entirely as local processes against PostgreSQL. The
 configured flow is:
 
 ```text
 Browser UI
    -> FastAPI on 127.0.0.1:8000
-   -> Postgres.app on 127.0.0.1:5432
+   -> PostgreSQL on 127.0.0.1:5432
       -> events + outbox + audit_logs
    -> local background worker
       -> suggestions + audit_logs + outbox completion
@@ -1104,11 +1104,11 @@ Host:     127.0.0.1
 Port:     5432
 ```
 
-Prepare the virtual environment and Postgres.app database:
+Prepare the virtual environment and PostgreSQL database:
 
 ```bash
 make setup
-make postgres-app-setup
+make db-setup
 ```
 
 Apply migrations:
@@ -1130,7 +1130,7 @@ make worker
 Inspect stored interactions:
 
 ```bash
-PGPASSWORD=healing /Applications/Postgres.app/Contents/Versions/latest/bin/psql \
+PGPASSWORD=healing psql \
   -h 127.0.0.1 -U healing -d healing
 ```
 
@@ -1164,7 +1164,7 @@ Create the virtual environment, prepare PostgreSQL, and run migrations:
 
 ```bash
 make setup
-make postgres-app-setup
+make db-setup
 make migrate
 ```
 

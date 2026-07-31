@@ -6,6 +6,7 @@ from app.integrations.postgres_bridge import ExternalPostgresBridge
 
 
 async def validate() -> int:
+    """Validate external bridge mappings and return a shell-compatible status."""
     settings = get_settings()
     bridge = ExternalPostgresBridge(settings)
     try:
@@ -17,6 +18,7 @@ async def validate() -> int:
 
 
 def main() -> None:
+    """Run bridge validation as a command-line program."""
     raise SystemExit(asyncio.run(validate()))
 
 

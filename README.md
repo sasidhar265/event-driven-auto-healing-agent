@@ -38,6 +38,7 @@ Choose the documentation path that matches what you need:
 | Non-technical overview | [Project walkthrough](documentation/PROJECT_WALKTHROUGH.md#1-what-this-project-does) |
 | Pictures and flow diagrams | [ART visual guide](documentation/VISUAL_GUIDE.md) |
 | Developer learning the code | [Code map](documentation/PROJECT_WALKTHROUGH.md#9-code-walkthrough) |
+| File and method correlation | [Code and method reference](documentation/CODE_REFERENCE.md) |
 | API or integration developer | [API guide](documentation/PROJECT_WALKTHROUGH.md#11-api-guide) |
 | Database administrator | [pgAdmin 4 guide](documentation/PGADMIN.md) |
 | Moving to another machine/environment | [Portability guide](documentation/PORTABILITY.md) |
@@ -88,7 +89,7 @@ Set `AI_PROVIDER=enterprise`, `AI_ENDPOINT` and optionally `AI_API_KEY` to enric
 ```bash
 cp .env.example .env
 make setup
-make postgres-app-setup
+make db-setup
 make migrate
 ```
 
@@ -125,10 +126,10 @@ Set `API_PROFILE` to `operations`, `integration`, `admin`, or `full` when
 starting the service in another environment. API paths and typed schemas remain
 unchanged whenever their profile is enabled.
 
-### Run against local PostgreSQL
+### Run against PostgreSQL
 
 ```bash
-make postgres-app-setup
+make db-setup
 make migrate
 make api
 ```
@@ -144,6 +145,12 @@ The local `.env` connection is:
 ```text
 postgresql+asyncpg://healing:healing@127.0.0.1:5432/healing
 ```
+
+`db-setup` uses the standard PostgreSQL command-line tools available on
+`PATH`; it is not tied to Postgres.app. Set `POSTGRES_HOST`, `POSTGRES_PORT`,
+`ART_ADMIN_USER`, and `ART_ADMIN_PASSWORD` when the server is not using the
+local defaults. pgAdmin connects to this same database and is only used for
+administration and reporting.
 
 Open `http://127.0.0.1:8000/ui/`. UI requests persist events and outbox work in
 PostgreSQL; the worker reads that outbox, writes suggestions and audit records,

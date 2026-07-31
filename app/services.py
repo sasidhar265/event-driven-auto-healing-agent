@@ -14,6 +14,7 @@ from app.runtime_config import get_runtime_rules
 
 @dataclass(frozen=True)
 class Candidate:
+    """A specialist agent's proposed remediation before governance is applied."""
     agent_type: str
     title: str
     rationale: str
@@ -41,6 +42,7 @@ class FailureRouter:
     """
 
     def classify(self, event: Event) -> FailureRoute:
+        """Score event fields and signals to select an explainable failure route."""
         config = get_runtime_rules().routing
         scoring = config.scoring
         payload = event.payload if isinstance(event.payload, dict) else {}
@@ -102,7 +104,9 @@ class FailureRouter:
 
 
 class KnowledgeService:
+    """Retrieves tenant knowledge and accepted remediations as agent evidence."""
     async def search(self, session: AsyncSession, event: Event) -> list[dict[str, Any]]:
+        """Return relevant knowledge and prior accepted fixes for an event."""
         config = get_runtime_rules().knowledge
         words = set(re.findall(r"[a-z0-9_]+", f"{event.event_type} {event.payload}".lower()))
         items = (await session.scalars(
@@ -158,15 +162,21 @@ class KnowledgeService:
 
 
 class Agent(Protocol):
+    """Interface implemented by every remediation specialist."""
     agent_type: str
 
-    async def suggest(self, event: Event, evidence: list[dict[str, Any]]) -> Candidate | None: ...
+    async def suggest(
+        self, event: Event, evidence: list[dict[str, Any]]
+    ) -> Candidate | None:
+        """Return a remediation candidate or abstain when the event is irrelevant."""
+        ...
 
 
 class AIService:
     """Optional enterprise AI gateway adapter; deterministic behavior is the safe default."""
 
     async def enrich(self, event: Event, candidate: Candidate, evidence: list[dict[str, Any]]) -> Candidate:
+        """Optionally enrich a candidate through the configured enterprise AI gateway."""
         from app.config import get_settings
 
         settings = get_settings()
@@ -193,10 +203,13 @@ class AIService:
 
 
 class PatternAgent:
+    """Configured specialist that emits a candidate when its signals match."""
     def __init__(self, agent_type: str, signals: set[str], action: str):
+        """Bind a specialist name, matching signals, and proposed action."""
         self.agent_type, self.signals, self.action = agent_type, signals, action
 
     async def suggest(self, event: Event, evidence: list[dict[str, Any]]) -> Candidate | None:
+        """Return a configured candidate when the event matches this specialist."""
         agent_config = get_runtime_rules().agents
         tuning = agent_config.confidence
         text = f"{event.event_type} {event.payload}".lower()
@@ -233,6 +246,7 @@ class TargetedRepairAgent(PatternAgent):
     """Create a file/method-level repair plan when the event supplies locations."""
 
     async def suggest(self, event: Event, evidence: list[dict[str, Any]]) -> Candidate | None:
+        """Build a targeted repair candidate with change and validation plans."""
         agent_config = get_runtime_rules().agents
         tuning = agent_config.confidence
         candidate = await super().suggest(event, evidence)
@@ -294,9 +308,11 @@ class TargetedRepairAgent(PatternAgent):
         )
 
     def _change_plan(self) -> list[dict[str, str]]:
+        """Return the configured ordered repair steps for this specialist."""
         return get_runtime_rules().agents.specialists[self.agent_type].change_plan
 
     def _validation(self, payload: dict[str, Any]) -> list[str]:
+        """Build verification instructions using available event context."""
         test_name = payload.get("test_name")
         config = get_runtime_rules().agents
         checks = list(config.base_validation)
@@ -307,9 +323,11 @@ class TargetedRepairAgent(PatternAgent):
 
 
 class XPathInvestigationAgent:
+    """Specialist for unstable, missing, or ambiguous UI element locators."""
     agent_type = "ui"
 
     async def suggest(self, event: Event, evidence: list[dict[str, Any]]) -> Candidate | None:
+        """Recommend a stable locator or request additional DOM evidence."""
         config = get_runtime_rules().agents.xpath
         text = f"{event.event_type} {event.payload}".lower()
         if not any(signal in text for signal in config.detection_signals):
@@ -384,6 +402,7 @@ class XPathInvestigationAgent:
 
 
 def specialist_agents() -> list[Agent]:
+    """Construct the specialist agents declared in runtime configuration."""
     specialists = get_runtime_rules().agents.specialists
     return [
         XPathInvestigationAgent(),
@@ -395,12 +414,15 @@ def specialist_agents() -> list[Agent]:
 
 
 class EvidenceRequestAgent:
+    """Fallback agent that requests missing evidence instead of guessing a fix."""
     agent_type = "investigation"
 
     def __init__(self, route: FailureRoute):
+        """Keep the ambiguous route details for the evidence request."""
         self.route = route
 
     async def suggest(self, event: Event, evidence: list[dict[str, Any]]) -> Candidate:
+        """Create a review-only candidate describing the missing evidence."""
         config = get_runtime_rules().agents.investigation
         return Candidate(
             agent_type=self.agent_type,
@@ -416,6 +438,7 @@ class EvidenceRequestAgent:
 
 
 def route_details(route: FailureRoute) -> dict[str, Any]:
+    """Convert a route into JSON-safe details for audit and suggestion output."""
     return {
         "category": route.category,
         "confidence": route.confidence,
@@ -443,9 +466,11 @@ def routed_agents(event: Event) -> tuple[FailureRoute, list[Agent]]:
 
 
 class PolicyEngine:
+    """Applies tenant governance and confidence gates to agent candidates."""
     async def evaluate(
         self, session: AsyncSession, event: Event, candidate: Candidate
     ) -> tuple[SuggestionStatus, dict[str, Any], float]:
+        """Return governed status, policy explanation, and final confidence."""
         policies = (await session.scalars(select(Policy).where(
             Policy.tenant_id == event.tenant_id, Policy.active.is_(True)
         ))).all()

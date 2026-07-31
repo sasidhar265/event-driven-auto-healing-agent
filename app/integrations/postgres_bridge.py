@@ -22,12 +22,14 @@ IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 def quote_identifier(value: str) -> str:
+    """Validate and quote one configured PostgreSQL identifier."""
     if not IDENTIFIER.fullmatch(value):
         raise ValueError(f"invalid PostgreSQL identifier: {value!r}")
     return f'"{value}"'
 
 
 def quote_table(value: str) -> str:
+    """Validate and quote a schema-qualified PostgreSQL table name."""
     parts = value.split(".")
     if len(parts) not in (1, 2):
         raise ValueError(f"table must be 'table' or 'schema.table': {value!r}")
@@ -36,6 +38,7 @@ def quote_table(value: str) -> str:
 
 @dataclass(frozen=True)
 class BridgeColumns:
+    """Configured external event-table column names used by the bridge."""
     event_id: str
     event_type: str
     source: str
@@ -52,6 +55,7 @@ class ExternalPostgresBridge:
     """Poll and write only explicitly configured PostgreSQL tables/columns."""
 
     def __init__(self, settings: Settings):
+        """Validate configured identifiers and prepare lazy external sessions."""
         self.settings = settings
         self.event_table = quote_table(settings.external_event_table)
         self.result_table = quote_table(settings.external_result_table)
@@ -77,6 +81,7 @@ class ExternalPostgresBridge:
         self._validate_result_identifiers()
 
     def _validate_result_identifiers(self) -> None:
+        """Reject unsafe result-column identifiers before constructing SQL."""
         names = [
             self.settings.external_result_suggestion_id_column,
             self.settings.external_result_event_id_column,
@@ -92,6 +97,7 @@ class ExternalPostgresBridge:
             quote_identifier(name)
 
     def _ensure_sessions(self) -> async_sessionmaker:
+        """Create and cache the external PostgreSQL session factory on demand."""
         if self.engine is None:
             url = self.settings.external_postgres_url or self.settings.database_url
             self.engine = create_async_engine(url, pool_pre_ping=True)
@@ -149,6 +155,7 @@ class ExternalPostgresBridge:
         }
 
     async def _columns(self, schema: str, table: str) -> set[str]:
+        """Read available column names from PostgreSQL information_schema."""
         async with self._ensure_sessions()() as session:
             rows = await session.execute(text("""
                 SELECT column_name FROM information_schema.columns
@@ -158,10 +165,12 @@ class ExternalPostgresBridge:
 
     @staticmethod
     def _table_parts(value: str) -> tuple[str, str]:
+        """Split a validated schema-qualified table into schema and table."""
         parts = value.split(".")
         return (parts[0], parts[1]) if len(parts) == 2 else ("public", parts[0])
 
     async def pull_events(self) -> int:
+        """Claim mapped external rows and persist them into normal ART intake."""
         from app.db import SessionLocal
 
         source_key = f"postgres:{self.settings.external_event_table}"
@@ -222,6 +231,7 @@ class ExternalPostgresBridge:
 
     @staticmethod
     def _payload(value: Any) -> dict[str, Any]:
+        """Normalize an external payload value into a JSON object."""
         if isinstance(value, dict):
             return value
         if isinstance(value, str):
@@ -231,6 +241,7 @@ class ExternalPostgresBridge:
         raise ValueError("external event payload must be a JSON object")
 
     async def push_ready_suggestions(self) -> int:
+        """Publish unreported ready suggestions to the configured external table."""
         from app.db import SessionLocal
 
         target = (
@@ -293,6 +304,7 @@ class ExternalPostgresBridge:
     async def _insert_result(
         self, session: Any, suggestion: Suggestion, external_id: str, payload: str
     ) -> None:
+        """Insert one suggestion into a dedicated external result table."""
         s = self.settings
         columns = [
             s.external_result_suggestion_id_column, s.external_result_event_id_column,
@@ -321,6 +333,7 @@ class ExternalPostgresBridge:
     async def _update_event(
         self, session: Any, suggestion: Suggestion, external_id: str, payload: str
     ) -> None:
+        """Write one suggestion back onto its source external event row."""
         result_column = quote_identifier(self.settings.external_event_result_column)
         status_column = quote_identifier(self.settings.external_event_result_status_column)
         await session.execute(text(f"""
@@ -334,5 +347,6 @@ class ExternalPostgresBridge:
         })
 
     async def close(self) -> None:
+        """Dispose the lazily created external PostgreSQL engine."""
         if self.engine is not None:
             await self.engine.dispose()

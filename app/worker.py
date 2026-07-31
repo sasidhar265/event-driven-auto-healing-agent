@@ -12,6 +12,7 @@ from app.webhooks import deliver_due
 
 
 async def run() -> None:
+    """Process durable outbox work, webhook deliveries, and any enabled DB bridge."""
     settings = get_settings()
     rules = get_runtime_rules()
     bridge = None
@@ -50,6 +51,7 @@ async def run() -> None:
 
 
 async def main() -> None:
+    """Run the worker and always dispose its PostgreSQL connection pool."""
     try:
         await run()
     finally:

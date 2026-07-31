@@ -5,7 +5,7 @@
 The reusable server definition is:
 
 ```text
-Name: ART - Postgres.app
+Name: ART PostgreSQL
 Group: ART Local
 Host: 127.0.0.1
 Port: 5432
@@ -22,7 +22,7 @@ stored in that file. Enter the database password when pgAdmin first connects.
 1. Open pgAdmin 4.
 2. Expand `Servers`.
 3. Expand `ART Local`.
-4. Select `ART - Postgres.app`.
+4. Select `ART PostgreSQL`.
 5. Enter the `healing` role password.
 6. Optionally select **Save Password** for this local development connection.
 
@@ -31,7 +31,7 @@ stored in that file. Enter the database password when pgAdmin first connects.
 Navigate to:
 
 ```text
-ART - Postgres.app
+ART PostgreSQL
 └── Databases
     └── healing
         └── Schemas

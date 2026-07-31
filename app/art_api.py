@@ -63,6 +63,7 @@ async def create_failure_event(
     auth: AuthenticatedUser,
     session: DatabaseSession,
 ):
+    """Create and audit one governed failure-event record."""
     return await repository(session, auth).create(FailureEvent, body)
 
 
@@ -74,6 +75,7 @@ async def list_failure_events(
     environment: str | None = None,
     limit: PageLimit = api_settings.api_default_limit,
 ):
+    """List tenant failure events with lifecycle filters."""
     return await repository(session, auth).list(
         FailureEvent,
         correlation_id=correlation_id,
@@ -88,6 +90,7 @@ async def create_agent_run(
     auth: AuthenticatedUser,
     session: DatabaseSession,
 ):
+    """Create and audit one agent workflow run."""
     return await repository(session, auth).create(AgentRun, body)
 
 
@@ -99,6 +102,7 @@ async def list_agent_runs(
     environment: str | None = None,
     limit: PageLimit = api_settings.api_default_limit,
 ):
+    """List tenant agent runs with lifecycle filters."""
     return await repository(session, auth).list(
         AgentRun,
         correlation_id=correlation_id,
@@ -114,6 +118,7 @@ async def update_agent_run(
     auth: AuthenticatedUser,
     session: DatabaseSession,
 ):
+    """Apply an audited state transition to an agent run."""
     return await repository(session, auth).change_state(AgentRun, record_id, body)
 
 
@@ -123,6 +128,7 @@ async def create_agent_run_step(
     auth: AuthenticatedUser,
     session: DatabaseSession,
 ):
+    """Create one traceable step within an agent run."""
     return await repository(session, auth).create(AgentRunStep, body)
 
 
@@ -134,6 +140,7 @@ async def list_agent_run_steps(
     environment: str | None = None,
     limit: PageLimit = api_settings.api_default_limit,
 ):
+    """List tenant agent-run steps with lifecycle filters."""
     return await repository(session, auth).list(
         AgentRunStep,
         correlation_id=correlation_id,
@@ -148,6 +155,7 @@ async def create_decision_journal(
     auth: AuthenticatedUser,
     session: DatabaseSession,
 ):
+    """Record one explainable agent decision."""
     return await repository(session, auth).create(AgentDecisionJournal, body)
 
 
@@ -159,6 +167,7 @@ async def list_decision_journals(
     environment: str | None = None,
     limit: PageLimit = api_settings.api_default_limit,
 ):
+    """List tenant agent decision-journal records."""
     return await repository(session, auth).list(
         AgentDecisionJournal,
         correlation_id=correlation_id,
@@ -173,6 +182,7 @@ async def create_impact_assessment(
     auth: AuthenticatedUser,
     session: DatabaseSession,
 ):
+    """Create an assessed impact record for a correlated failure."""
     return await repository(session, auth).create(ImpactAssessment, body)
 
 
@@ -184,6 +194,7 @@ async def list_impact_assessments(
     environment: str | None = None,
     limit: PageLimit = api_settings.api_default_limit,
 ):
+    """List tenant impact assessments with lifecycle filters."""
     return await repository(session, auth).list(
         ImpactAssessment,
         correlation_id=correlation_id,
@@ -198,6 +209,7 @@ async def create_impact_dependency(
     auth: AuthenticatedUser,
     session: DatabaseSession,
 ):
+    """Attach one affected dependency to an impact assessment."""
     return await repository(session, auth).create(ImpactDependency, body)
 
 
@@ -209,6 +221,7 @@ async def list_impact_dependencies(
     environment: str | None = None,
     limit: PageLimit = api_settings.api_default_limit,
 ):
+    """List tenant impact-dependency records."""
     return await repository(session, auth).list(
         ImpactDependency,
         correlation_id=correlation_id,
@@ -223,6 +236,7 @@ async def create_test_selection(
     auth: AuthenticatedUser,
     session: DatabaseSession,
 ):
+    """Record the governed tests selected for a proposed change."""
     return await repository(session, auth).create(TestSelectionDecision, body)
 
 
@@ -234,6 +248,7 @@ async def list_test_selections(
     environment: str | None = None,
     limit: PageLimit = api_settings.api_default_limit,
 ):
+    """List tenant test-selection decisions."""
     return await repository(session, auth).list(
         TestSelectionDecision,
         correlation_id=correlation_id,
@@ -248,6 +263,7 @@ async def create_execution_intent(
     auth: AuthenticatedUser,
     session: DatabaseSession,
 ):
+    """Create a governed request to execute a selected action."""
     return await repository(session, auth).create(ExecutionIntent, body)
 
 
@@ -259,6 +275,7 @@ async def list_execution_intents(
     environment: str | None = None,
     limit: PageLimit = api_settings.api_default_limit,
 ):
+    """List tenant execution intents with lifecycle filters."""
     return await repository(session, auth).list(
         ExecutionIntent,
         correlation_id=correlation_id,
@@ -274,6 +291,7 @@ async def update_execution_intent(
     auth: AuthenticatedUser,
     session: DatabaseSession,
 ):
+    """Apply a governance-checked execution-intent state transition."""
     return await repository(session, auth).change_state(ExecutionIntent, record_id, body)
 
 
@@ -283,6 +301,7 @@ async def create_execution_result(
     auth: AuthenticatedUser,
     session: DatabaseSession,
 ):
+    """Record a reference to an execution result or artifact."""
     return await repository(session, auth).create(ExecutionResultRef, body)
 
 
@@ -294,6 +313,7 @@ async def list_execution_results(
     environment: str | None = None,
     limit: PageLimit = api_settings.api_default_limit,
 ):
+    """List tenant execution-result references."""
     return await repository(session, auth).list(
         ExecutionResultRef,
         correlation_id=correlation_id,
@@ -308,6 +328,7 @@ async def create_self_heal_proposal(
     auth: AuthenticatedUser,
     session: DatabaseSession,
 ):
+    """Create a governed self-healing proposal without executing it."""
     return await repository(session, auth).create(SelfHealProposal, body)
 
 
@@ -319,6 +340,7 @@ async def list_self_heal_proposals(
     environment: str | None = None,
     limit: PageLimit = api_settings.api_default_limit,
 ):
+    """List tenant self-healing proposals."""
     return await repository(session, auth).list(
         SelfHealProposal,
         correlation_id=correlation_id,
@@ -334,6 +356,7 @@ async def update_self_heal_proposal(
     auth: AuthenticatedUser,
     session: DatabaseSession,
 ):
+    """Apply an audited, governance-checked proposal state transition."""
     return await repository(session, auth).change_state(SelfHealProposal, record_id, body)
 
 
@@ -343,6 +366,7 @@ async def create_outcome_feedback(
     auth: AuthenticatedUser,
     session: DatabaseSession,
 ):
+    """Record observed outcome feedback for lifecycle learning."""
     return await repository(session, auth).create(OutcomeFeedback, body)
 
 
@@ -354,6 +378,7 @@ async def list_outcome_feedback(
     environment: str | None = None,
     limit: PageLimit = api_settings.api_default_limit,
 ):
+    """List tenant outcome-feedback records."""
     return await repository(session, auth).list(
         OutcomeFeedback,
         correlation_id=correlation_id,
@@ -368,6 +393,7 @@ async def create_event_inbox(
     auth: AuthenticatedUser,
     session: DatabaseSession,
 ):
+    """Record receipt and idempotency state for a lifecycle event."""
     return await repository(session, auth).create(ArtEventInbox, body)
 
 
@@ -379,6 +405,7 @@ async def list_event_inbox(
     environment: str | None = None,
     limit: PageLimit = api_settings.api_default_limit,
 ):
+    """List tenant lifecycle inbox records."""
     return await repository(session, auth).list(
         ArtEventInbox,
         correlation_id=correlation_id,
@@ -393,6 +420,7 @@ async def create_event_outbox(
     auth: AuthenticatedUser,
     session: DatabaseSession,
 ):
+    """Create a durable lifecycle event awaiting publication."""
     return await repository(session, auth).create(ArtEventOutbox, body)
 
 
@@ -404,6 +432,7 @@ async def list_event_outbox(
     environment: str | None = None,
     limit: PageLimit = api_settings.api_default_limit,
 ):
+    """List tenant lifecycle outbox records."""
     return await repository(session, auth).list(
         ArtEventOutbox,
         correlation_id=correlation_id,
@@ -416,11 +445,13 @@ def _register_resource_read_route(
     resource: str,
     model: type[DeclarativeBase],
 ) -> None:
+    """Register a tenant-safe GET-by-ID route for a lifecycle model."""
     async def read_resource(
         record_id: uuid.UUID,
         auth: AuthenticatedUser,
         session: DatabaseSession,
     ):
+        """Read one tenant-owned lifecycle resource through the repository."""
         return await repository(session, auth).get(model, record_id)
 
     read_resource.__name__ = f"get_{resource.replace('-', '_')}"
@@ -457,4 +488,5 @@ async def correlation_trace(
     auth: AuthenticatedUser,
     session: DatabaseSession,
 ):
+    """Return the complete tenant lifecycle trace for one correlation UUID."""
     return await repository(session, auth).correlation_trace(correlation_id)

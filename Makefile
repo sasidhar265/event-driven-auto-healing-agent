@@ -3,7 +3,7 @@ VENV ?= .venv
 
 .PHONY: setup test coverage migrate api api-integration api-admin api-full worker \
 	backbone validate-integration verify-art \
-	postgres-app-setup postgres-app-inspect pgadmin-register
+	db-setup db-inspect pgadmin-register
 
 setup:
 	$(PYTHON) -m venv $(VENV)
@@ -43,11 +43,11 @@ validate-integration:
 verify-art:
 	$(VENV)/bin/python scripts/verify_art_lifecycle.py
 
-postgres-app-setup:
-	./scripts/postgres_app_setup.sh
+db-setup:
+	./scripts/db_setup.sh
 
-postgres-app-inspect:
-	./scripts/postgres_app_inspect.sh
+db-inspect:
+	./scripts/db_inspect.sh
 
 pgadmin-register:
 	./scripts/pgadmin_register.sh

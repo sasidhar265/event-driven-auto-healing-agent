@@ -29,7 +29,7 @@ Existing result table     Allow-listed columns
 
 ART can run:
 
-- As local Python processes against Postgres.app or another local PostgreSQL server.
+- As local Python processes against any local PostgreSQL server.
 - As local Python processes against an external PostgreSQL server.
 - Against one PostgreSQL database for ART and another for legacy integration.
 - Against the same database for both ART and existing tables.
