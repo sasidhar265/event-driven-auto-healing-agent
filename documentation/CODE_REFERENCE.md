@@ -159,9 +159,10 @@ Optional internal methods, exposed by the `admin` or `full` profile:
 - `create_policy()` / `list_policies()` manage tenant governance rules.
 - `create_knowledge()` / `list_knowledge()` manage tenant knowledge records.
 
-### `app/art_api.py`
+### `app/art/`
 
-Exposes generic governed-lifecycle CRUD routes in admin/full mode.
+Exposes governed lifecycle routes in admin/full mode, grouped into
+`failures.py`, `analysis.py`, `execution.py`, `events.py`, and `reads.py`.
 
 - `repository()` creates a tenant-scoped `ArtRepository` for a request.
 - Each `create_*` method creates its named resource: failure event, agent run,
@@ -261,6 +262,7 @@ Provides one governed persistence implementation for all ART lifecycle models.
   If the optional external PostgreSQL bridge is enabled, it also pulls and
   publishes bridge records.
 - `main()` guarantees database-engine disposal.
+- `app/repositories/worker/` owns outbox locking and publication state changes.
 
 ### `app/processor.py`
 
@@ -332,6 +334,8 @@ Mirrors normal processing into the governed enterprise lifecycle model.
 - `cloud_event()` converts a ready suggestion to a CloudEvents payload.
 - `deliver_due()` locks eligible delivery rows, calls subscriber URLs, records
   success, schedules exponential retries, or marks dead letters.
+- `app/delivery/payloads.py` owns CloudEvents serialization.
+- `app/delivery/retry.py` owns capped retry-delay calculation.
 
 ### `app/backbone.py`
 

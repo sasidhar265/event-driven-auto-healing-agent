@@ -8,27 +8,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+from app.delivery.payloads import cloud_event
+from app.delivery.retry import retry_delay
 from app.models import AuditLog, Suggestion, WebhookDelivery, WebhookSubscription
 from app.runtime_config import get_runtime_rules
-
-
-def cloud_event(suggestion: Suggestion) -> dict:
-    """Serialize a ready suggestion as the downstream CloudEvents payload."""
-    delivery = get_runtime_rules().delivery
-    return {
-        "specversion": "1.0", "id": str(suggestion.id),
-        "source": delivery.cloud_event_source,
-        "type": delivery.cloud_event_type, "subject": str(suggestion.event_id),
-        "time": suggestion.created_at.isoformat(), "datacontenttype": "application/json",
-        "tenantid": suggestion.tenant_id,
-        "data": {
-            "suggestion_id": str(suggestion.id), "event_id": str(suggestion.event_id),
-            "agent_type": suggestion.agent_type, "title": suggestion.title,
-            "rationale": suggestion.rationale, "proposed_changes": suggestion.proposed_changes,
-            "evidence": suggestion.evidence, "confidence": suggestion.confidence,
-            "policy_result": suggestion.policy_result, "status": suggestion.status.value,
-        },
-    }
 
 
 async def deliver_due(session: AsyncSession, limit: int | None = None) -> int:
@@ -78,8 +61,9 @@ async def deliver_due(session: AsyncSession, limit: int | None = None) -> int:
             else:
                 delivery.status = "retry"
                 delivery.next_attempt_at = now + timedelta(
-                    seconds=min(
-                        delivery_config.retry_base_seconds ** delivery.attempts,
+                    seconds=retry_delay(
+                        delivery.attempts,
+                        delivery_config.retry_base_seconds,
                         delivery_config.retry_max_seconds,
                     )
                 )

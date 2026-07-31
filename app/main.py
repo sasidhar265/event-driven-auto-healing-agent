@@ -9,7 +9,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api import integration_router, internal_router, operations_router
-from app.art_api import router as art_router
+from app.art import router as art_router
 from app.config import get_settings
 from app.db import engine
 from app.runtime_config import get_runtime_rules

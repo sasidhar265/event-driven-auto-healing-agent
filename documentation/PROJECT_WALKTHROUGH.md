@@ -173,7 +173,8 @@ The existing event is returned instead of creating a duplicate.
 
 ### Stage 2: worker pickup
 
-`app/worker.py` polls unpublished outbox records. It uses database row locking
+`app/worker.py` polls unpublished outbox records through
+`app/repositories/worker/`. It uses database row locking
 with `SKIP LOCKED`, allowing more than one worker to process different work
 without taking the same row.
 
@@ -392,7 +393,8 @@ library.
 
 ### Webhooks and event backbone
 
-- `app/webhooks.py` signs and retries outbound ready-suggestion delivery.
+- `app/webhooks.py` dispatches outbound suggestions; `app/delivery/` owns
+  CloudEvents payloads and retry timing.
 - `app/backbone.py` consumes structured or binary CloudEvents from Kafka.
 
 ### Enterprise ART lifecycle
@@ -402,7 +404,7 @@ library.
 - `app/art_repository.py`: tenant-scoped lifecycle persistence.
 - `app/art_lifecycle.py`: records the operational pipeline into lifecycle
   resources.
-- `app/art_api.py`: admin/full-profile lifecycle endpoints.
+- `app/art/`: domain-grouped admin/full-profile lifecycle endpoints.
 
 ### UI source
 

@@ -1,12 +1,9 @@
 import asyncio
-from datetime import UTC, datetime
-
-from sqlalchemy import select
-
 from app.config import get_settings
 from app.db import SessionLocal, engine
-from app.models import Outbox
 from app.processor import process_event
+from app.repositories.worker.commands import mark_published
+from app.repositories.worker.queries import lock_pending_outbox
 from app.runtime_config import get_runtime_rules
 from app.webhooks import deliver_due
 
@@ -27,16 +24,13 @@ async def run() -> None:
         while True:
             pulled = await bridge.pull_events() if bridge else 0
             async with SessionLocal() as session:
-                items = (await session.scalars(
-                    select(Outbox).where(Outbox.published_at.is_(None))
-                    .order_by(Outbox.available_at)
-                    .limit(rules.delivery.worker_batch_size)
-                    .with_for_update(skip_locked=True)
-                )).all()
+                items = await lock_pending_outbox(
+                    session, rules.delivery.worker_batch_size
+                )
                 for item in items:
                     if item.topic == "event.received":
                         await process_event(session, item.aggregate_id)
-                    item.published_at = datetime.now(UTC)
+                    mark_published(item)
                 delivery_count = await deliver_due(session)
                 await session.commit()
             pushed = await bridge.push_ready_suggestions() if bridge else 0
