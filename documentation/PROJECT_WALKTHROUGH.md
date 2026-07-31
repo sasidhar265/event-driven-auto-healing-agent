@@ -179,7 +179,7 @@ without taking the same row.
 
 ### Stage 3: identification and routing
 
-`app/services.py` evaluates explicit categories, structured fields, and text
+`app/services/routing.py` evaluates explicit categories, structured fields, and text
 signals. Supported domains include:
 
 - UI
@@ -349,17 +349,24 @@ Validates `X-API-Key` and requires `X-Tenant-Id`. It constructs the trusted
 principal used by API queries. `X-Actor` identifies the calling person or
 system in audit records.
 
-### Operational API: `app/api.py`
+### Operational API: `app/api/`
 
-Contains event, trace, overview, suggestion, decision, audit, integration, and
-internal-service handlers. Read it alongside `app/schemas.py` and
-`app/models.py`.
+Contains responsibility-based event, overview, suggestion, audit, integration,
+and internal-service handlers. Read these modules alongside `app/schemas.py`
+and `app/models.py`.
 
 ### Ingestion: `app/ingestion.py`
 
-Owns native/CloudEvent conversion, idempotency, event creation, outbox creation,
-and initial audit creation. Keeping this in one service lets HTTP and Kafka use
-the same persistence behavior.
+Owns native/CloudEvent conversion and delegates idempotent event, outbox, and
+audit creation to `app/repositories/events/commands.py`. HTTP and Kafka
+therefore use the same persistence behavior.
+
+### Database repositories: `app/repositories/`
+
+Separates record writes (`commands.py`) from tenant-scoped reads
+(`queries.py`) inside event, suggestion, governance, knowledge, delivery,
+audit, and reporting domains. API handlers do not construct SQL. Alembic
+migrations remain responsible for creating and evolving tables and views.
 
 ### Processing: `app/processor.py`
 
@@ -367,10 +374,10 @@ Coordinates knowledge retrieval, routing, specialist execution, optional AI
 enrichment, policy evaluation, suggestion persistence, lifecycle recording,
 and ready-webhook creation.
 
-### Domain services: `app/services.py`
+### Domain services: `app/services/`
 
-Contains the failure router, specialist implementations, knowledge retrieval,
-AI provider boundary, and Policy Engine.
+Separates the failure router, specialist implementations, knowledge retrieval,
+AI provider boundary, shared values, and Policy Engine.
 
 ### Worker: `app/worker.py`
 
@@ -399,7 +406,8 @@ library.
 ### UI source
 
 - `app/static/index.html`: page structure and Bootstrap controls.
-- `app/static/app.js`: API calls, rendering, filtering, modals, and interaction.
+- `app/static/js/`: feature-specific API calls, rendering, filtering, modals,
+  and interaction.
 - `app/static/styles.css`: ART appearance and responsive layout.
 
 ### Migrations and tests
@@ -545,7 +553,7 @@ PostgreSQL tables without rewriting the core:
 
 Routing keywords, weights, confidence bonuses, specialist instructions,
 lifecycle mappings, batch sizes, and retry timing are maintained separately in
-`app/resources/runtime_rules.json`. See the
+`app/resources/runtime/`. See the
 [runtime configuration guide](CONFIGURATION.md).
 
 ## 14. Testing and verification
@@ -593,7 +601,7 @@ The tests protect:
 ### Adding a failure type
 
 1. Define the expected structured evidence.
-2. Add or extend routing signals in `app/services.py`.
+2. Add or extend routing signals in `app/resources/runtime/routing.json`.
 3. Add the specialist behavior or safe abstention.
 4. Add an incident profile only if it helps operators submit that evidence.
 5. Add unit tests for strong, ambiguous, and incomplete evidence.

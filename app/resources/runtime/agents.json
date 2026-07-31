@@ -1,0 +1,369 @@
+{
+  "confidence": {
+    "base": 0.62,
+    "signal_bonus": 0.06,
+    "evidence_bonus_per_item": 0.04,
+    "evidence_bonus_cap": 0.12,
+    "severity_bonus": {
+      "critical": 0.08,
+      "error": 0.05,
+      "warning": 0.02
+    },
+    "maximum": 0.97,
+    "target_file_bonus": 0.04,
+    "target_method_bonus": 0.03,
+    "trace_bonus": 0.03,
+    "missing_evidence_cap": 0.59
+  },
+  "target_file_fields": [
+    "source_file",
+    "test_file",
+    "manifest_file",
+    "config_file",
+    "migration_file",
+    "policy_file"
+  ],
+  "target_method_fields": [
+    "method_name",
+    "test_name",
+    "resource_name",
+    "query_name"
+  ],
+  "trace_required_categories": [
+    "logic",
+    "api"
+  ],
+  "base_validation": [
+    "rerun the originally failing test",
+    "run the owning component regression suite",
+    "confirm the original error and observable symptom are absent"
+  ],
+  "rollback_instruction": "revert the proposed file-level change and rerun the failing test",
+  "title_template": "{agent_type} remediation for {event_type}",
+  "rationale_template": "Matched signals: {matches}. Correlated knowledge: {evidence_count} item(s).",
+  "missing_target_evidence": "source_file or test_file",
+  "missing_trace_evidence": "stack_trace or trace_id",
+  "specialists": {
+    "ui": {
+      "signals": [
+        "ui",
+        "frontend",
+        "render",
+        "browser",
+        "layout"
+      ],
+      "action": "propose_ui_patch",
+      "required_evidence": [
+        "failed locator or screenshot/DOM",
+        "test file and test name"
+      ],
+      "change_plan": [
+        {
+          "step": "inspect",
+          "instruction": "Compare the failed UI assertion/locator with the supplied DOM and screenshot."
+        },
+        {
+          "step": "change",
+          "instruction": "Update the smallest affected component or test locator; prefer stable test IDs."
+        }
+      ]
+    },
+    "api": {
+      "signals": [
+        "api",
+        "http",
+        "timeout",
+        "endpoint",
+        "gateway"
+      ],
+      "action": "propose_api_change",
+      "required_evidence": [
+        "endpoint and observed response/error",
+        "trace or relevant logs"
+      ],
+      "change_plan": [
+        {
+          "step": "inspect",
+          "instruction": "Trace the failing endpoint through its handler and downstream call using the trace ID."
+        },
+        {
+          "step": "change",
+          "instruction": "Correct the failing handler/dependency boundary; do not merely increase a timeout without latency evidence."
+        }
+      ],
+      "validation": [
+        "verify response contract, latency, and downstream error rate"
+      ]
+    },
+    "logic": {
+      "signals": [
+        "exception",
+        "null",
+        "logic",
+        "calculation",
+        "state"
+      ],
+      "action": "propose_logic_patch",
+      "required_evidence": [
+        "exception type and stack trace",
+        "source file or failing method"
+      ],
+      "change_plan": [
+        {
+          "step": "inspect",
+          "instruction": "Use the first application frame in the stack trace to locate the failing branch."
+        },
+        {
+          "step": "change",
+          "instruction": "Correct the violated invariant at its source and add a regression test for the observed input."
+        }
+      ]
+    },
+    "functional": {
+      "signals": [
+        "workflow",
+        "business",
+        "functional",
+        "process"
+      ],
+      "action": "propose_workflow_change",
+      "required_evidence": [
+        "expected result and actual result",
+        "workflow step"
+      ],
+      "change_plan": [
+        {
+          "step": "inspect",
+          "instruction": "Compare expected and actual workflow state at the failing step."
+        },
+        {
+          "step": "change",
+          "instruction": "Correct the transition or business rule and preserve adjacent valid transitions."
+        }
+      ]
+    },
+    "test_data": {
+      "signals": [
+        "fixture",
+        "test data",
+        "seed",
+        "dataset",
+        "mock"
+      ],
+      "action": "propose_test_data_change",
+      "required_evidence": [
+        "fixture/dataset identifier",
+        "expected schema or values"
+      ],
+      "change_plan": [
+        {
+          "step": "inspect",
+          "instruction": "Compare the fixture/dataset with the current input schema and test expectation."
+        },
+        {
+          "step": "change",
+          "instruction": "Update the smallest invalid fixture value or factory default."
+        }
+      ]
+    },
+    "database": {
+      "signals": [
+        "database",
+        "postgres",
+        "sql",
+        "query",
+        "deadlock",
+        "migration"
+      ],
+      "action": "propose_database_change",
+      "required_evidence": [
+        "database error/SQL state",
+        "query or migration identifier"
+      ],
+      "change_plan": [
+        {
+          "step": "inspect",
+          "instruction": "Use SQL state, query identity, locks, and the execution plan to establish the database cause."
+        },
+        {
+          "step": "change",
+          "instruction": "Apply the smallest query, index, constraint, pool, or migration correction; preserve transactional integrity."
+        }
+      ],
+      "validation": [
+        "verify transaction correctness and query plan",
+        "monitor lock and pool metrics"
+      ]
+    },
+    "infrastructure": {
+      "signals": [
+        "infrastructure",
+        "kubernetes",
+        "pod",
+        "container",
+        "oomkilled",
+        "cpu",
+        "memory",
+        "capacity"
+      ],
+      "action": "propose_infrastructure_change",
+      "required_evidence": [
+        "resource identity",
+        "current metrics and desired state"
+      ],
+      "change_plan": [
+        {
+          "step": "inspect",
+          "instruction": "Compare workload events and resource metrics with the declared deployment state."
+        },
+        {
+          "step": "change",
+          "instruction": "Correct the owning manifest or capacity setting with explicit blast-radius and rollback limits."
+        }
+      ],
+      "validation": [
+        "apply first in a non-production environment",
+        "verify health, saturation, and rollback"
+      ]
+    },
+    "dependency": {
+      "signals": [
+        "dependency",
+        "upstream",
+        "downstream",
+        "service unavailable",
+        "dns",
+        "circuit breaker"
+      ],
+      "action": "propose_dependency_change",
+      "required_evidence": [
+        "dependency identity and endpoint",
+        "upstream response or health"
+      ],
+      "change_plan": [
+        {
+          "step": "inspect",
+          "instruction": "Confirm dependency health, contract, DNS, TLS, and retry/circuit-breaker behavior."
+        },
+        {
+          "step": "change",
+          "instruction": "Correct the dependency boundary or resilience policy without hiding a persistent upstream failure."
+        }
+      ],
+      "validation": [
+        "exercise timeout, retry, and circuit-breaker behavior"
+      ]
+    },
+    "security": {
+      "signals": [
+        "security",
+        "unauthorized",
+        "forbidden",
+        "authentication",
+        "permission",
+        "certificate",
+        "cve"
+      ],
+      "action": "propose_security_change",
+      "required_evidence": [
+        "failed security control and principal",
+        "sanitized authentication evidence"
+      ],
+      "change_plan": [
+        {
+          "step": "inspect",
+          "instruction": "Validate identity, authorization policy, credential age, and certificate evidence without exposing secrets."
+        },
+        {
+          "step": "change",
+          "instruction": "Restore least-privilege access or rotate the affected credential through the approved security workflow."
+        }
+      ],
+      "validation": [
+        "run authorization regression tests",
+        "confirm no credential is logged or embedded"
+      ]
+    },
+    "performance": {
+      "signals": [
+        "performance",
+        "latency",
+        "slow",
+        "throughput",
+        "p95",
+        "p99",
+        "memory leak",
+        "bottleneck"
+      ],
+      "action": "propose_performance_change",
+      "required_evidence": [
+        "baseline and observed measurement",
+        "trace/profile or slow query"
+      ],
+      "change_plan": [
+        {
+          "step": "inspect",
+          "instruction": "Compare the trace/profile with a known baseline and locate the dominant latency or allocation contributor."
+        },
+        {
+          "step": "change",
+          "instruction": "Optimize the measured bottleneck and preserve response correctness under representative load."
+        }
+      ],
+      "validation": [
+        "repeat the benchmark and compare p50/p95/p99 with baseline"
+      ]
+    }
+  },
+  "xpath": {
+    "detection_signals": [
+      "xpath",
+      "nosuchelement",
+      "element_not_found"
+    ],
+    "missing_evidence_confidence": 0.58,
+    "locator_priorities": {
+      "data-testid": 100,
+      "id": 85,
+      "name": 70,
+      "aria-label": 60
+    },
+    "confidence_base": 0.72,
+    "preferred_locator_bonus": 0.12,
+    "other_locator_bonus": 0.05,
+    "unique_bonus": 0.06,
+    "evidence_bonus_per_item": 0.03,
+    "evidence_bonus_cap": 0.09,
+    "maximum": 0.97,
+    "required_evidence": [
+      "sanitized DOM near target",
+      "screenshot",
+      "successful locator history"
+    ],
+    "validation": [
+      "assert locator resolves exactly one element",
+      "run failed test",
+      "run owning UI regression suite"
+    ],
+    "missing_title": "Collect current DOM evidence for failed XPath",
+    "missing_rationale": "The XPath failed, but no current DOM candidates were supplied; a safe replacement cannot be inferred.",
+    "missing_action": "collect_dom_snapshot",
+    "replacement_title": "Replace obsolete XPath with a stable locator",
+    "replacement_rationale": "The failed XPath no longer resolves. A current DOM candidate provides a {strategy} locator{unique_suffix}.",
+    "replacement_action": "replace_test_locator",
+    "rollback_instruction": "restore the previous test locator"
+  },
+  "investigation": {
+    "confidence": 0.4,
+    "required_evidence": [
+      "exception type and complete application stack trace",
+      "source/test file and failing method/test name",
+      "expected and actual result",
+      "relevant logs and distributed trace ID",
+      "UI DOM/screenshot or API request/response details when applicable"
+    ],
+    "title_template": "Collect evidence to classify {event_type}",
+    "rationale": "The failure category is unknown or ambiguous, so proposing a code change would be unsafe.",
+    "action": "collect_failure_evidence"
+  }
+}

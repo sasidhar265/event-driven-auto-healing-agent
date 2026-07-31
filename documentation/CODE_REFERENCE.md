@@ -11,8 +11,9 @@ not sit in the application's request path.
 Browser or monitoring system
   -> app/main.py: create_application()
   -> app/security.py: principal()
-  -> app/api.py: ingest_event()
+  -> app/api/events.py: ingest_event()
   -> app/ingestion.py: persist_event()
+  -> app/repositories/events/commands.py: create_event()
   -> PostgreSQL: events + outbox + audit_logs
   -> app/worker.py: run()
   -> app/processor.py: process_event()
@@ -24,8 +25,8 @@ Browser or monitoring system
      -> _create_suggestion()
      -> LifecycleRecorder methods
   -> PostgreSQL: suggestions + audit + ART lifecycle records
-  -> app/api.py: list_suggestions(), decide(), audit()
-  -> app/static/app.js: render the result
+  -> app/api/suggestions.py and app/api/audit.py
+  -> app/static/js/: render the result
 
 pgAdmin -> the same PostgreSQL database (inspection/reporting only)
 ```
@@ -62,11 +63,11 @@ Owns the shared async SQLAlchemy engine and session factory.
 - `get_session()` yields a session to FastAPI endpoints and closes it after the
   request.
 
-### `app/runtime_config.py` and `app/resources/runtime_rules.json`
+### `app/runtime_config.py` and `app/resources/runtime/`
 
-The JSON file contains editable routing weights, specialist templates,
-confidence rules, lifecycle limits, and delivery settings. The Python file
-validates and exposes those rules.
+The directory contains responsibility-based JSON files for routing, agents,
+knowledge, lifecycle, and delivery. The Python file combines, validates, and
+exposes them as one rule set.
 
 - `RoutingScoreConfig`, `RoutingConfig`, `ConfidenceConfig`,
   `SpecialistConfig`, `XPathConfig`, `InvestigationConfig`, `AgentConfig`,
@@ -75,7 +76,8 @@ validates and exposes those rules.
 - `categories_match()`, `validate_templates()`, and
   `specialist_categories_match_routing()` perform cross-field validation.
 - `RuntimeRules` is the validated root configuration model.
-- `get_runtime_rules()` reads and caches the configured JSON file.
+- `load_runtime_rules()` combines and validates the configured rule files.
+- `get_runtime_rules()` resolves the configured path and caches the result.
 
 ## 3. Authentication and request schemas
 
@@ -117,10 +119,19 @@ Defines the larger governed ART lifecycle contracts.
 
 ## 4. HTTP API files
 
-### `app/api.py`
+### `app/api/`
 
-Implements the normal operations API plus optional integration/admin routes.
-Every database query is scoped by the authenticated tenant.
+Composes domain endpoint modules while preserving the public router imports
+used by `app/main.py`. Every database query is scoped by the authenticated
+tenant.
+
+- `routers.py`: shared operations, integration, and internal routers.
+- `events.py`: native/CloudEvent intake, event reads, lists, and traces.
+- `overview.py`: operational and confidence-decision metrics.
+- `suggestions.py`: suggestion reads, decisions, and learning references.
+- `audit.py`: tenant audit search.
+- `administration.py`: governance-policy and knowledge CRUD.
+- `integrations.py`: webhook subscriptions and delivery management.
 
 Operations methods:
 
@@ -165,6 +176,31 @@ Exposes generic governed-lifecycle CRUD routes in admin/full mode.
 - `correlation_trace()` returns all lifecycle records for one correlation UUID.
 
 ## 5. Persistence models and repositories
+
+### `app/repositories/`
+
+Database record creation and retrieval are separated by domain. API handlers
+validate HTTP input and format responses; they do not construct SQL.
+
+```text
+repositories/<domain>/commands.py  -> inserts, updates, locks, commits
+repositories/<domain>/queries.py   -> tenant-scoped reads and projections
+```
+
+- `events/commands.py`: idempotent event, outbox, and audit creation.
+- `events/queries.py`: event reads, lists, and trace records.
+- `suggestions/commands.py`: operator-decision transactions.
+- `suggestions/queries.py`: suggestions, source events, and references.
+- `governance/`: policy creation, administration reads, and active-policy reads.
+- `knowledge/`: knowledge creation, administration reads, and evidence scans.
+- `delivery/`: subscription creation/deactivation, retries, and delivery reads.
+- `audit/queries.py`: filtered, enriched audit reporting.
+- `reporting/overview.py`: operational and confidence overview projection.
+
+Repository commands document whether they commit. Processing services that
+coordinate larger transactions may continue staging several model changes in
+their caller-owned transaction. Table and view creation remains exclusively in
+Alembic migrations.
 
 ### `app/models.py`
 
@@ -241,18 +277,21 @@ Provides one governed persistence implementation for all ART lifecycle models.
   and matching active subscriptions.
 - `_add_audit_log()` adds processing audit entries.
 
-### `app/services.py`
+### `app/services/`
 
-Contains routing, evidence, agent, AI, and governance services.
+Separates routing, evidence, agents, AI, and governance while `__init__.py`
+preserves the original public imports.
 
-- `Candidate` is an agent's proposed remediation.
-- `FailureRoute` describes the selected category and routing evidence.
-- `FailureRouter.classify()` scores structured fields and text signals.
-- `KnowledgeService.search()` finds tenant knowledge and previously accepted
+- `types.py`: `Candidate` and `FailureRoute` shared values.
+- `routing.py`: `FailureRouter`, `route_details()`, and `routed_agents()`.
+- `knowledge.py`: `KnowledgeService.search()` finds knowledge and accepted
   remediation references.
-- `Agent.suggest()` defines the specialist-agent interface.
-- `AIService.enrich()` optionally calls an approved AI endpoint while keeping
+- `ai.py`: `AIService.enrich()` optionally calls an approved AI endpoint while keeping
   deterministic policy control in the application.
+- `agents.py`: `Agent`, `PatternAgent`, `TargetedRepairAgent`,
+  `XPathInvestigationAgent`, `EvidenceRequestAgent`, and `specialist_agents()`.
+- `policy.py`: `PolicyEngine.evaluate()` applies tenant policy and confidence
+  thresholds.
 - `PatternAgent.suggest()` produces a configured pattern-based candidate.
 - `TargetedRepairAgent.suggest()`, `_change_plan()`, and `_validation()` add
   structured repair and verification instructions.
@@ -344,7 +383,19 @@ Bootstrap component structure.
 Defines the visual theme and responsive layout; it has no application or
 database logic.
 
-### `app/static/app.js`
+### `app/static/js/`
+
+Browser behavior is split by feature and loaded in dependency order without a
+build step:
+
+- `data.js`: scenarios, labels, and UI state.
+- `core.js`: DOM, API, escaping, toast, and modal utilities.
+- `incidents.js`: trace rendering, navigation, intake, and polling.
+- `overview.js`: operational metrics and decision records.
+- `suggestions.js`: suggestion rendering and decisions.
+- `audit.js`: audit retrieval, filters, and date controls.
+- `settings.js`: connection health/settings and audit export.
+- `main.js`: event binding and startup.
 
 - `$()` / `$$()` select DOM elements; `escapeHtml()` protects rendered text;
   `sleep()` supports polling.
@@ -448,12 +499,13 @@ Tests mirror the runtime areas and are the best place to find usage examples.
 | Desired change | Primary file | Usually correlated with |
 |---|---|---|
 | Add an incident input field | `app/schemas.py` | `app/models.py`, migration, UI |
-| Add/change an endpoint | `app/api.py` | schema, test, UI |
-| Change routing | `runtime_rules.json` | `services.py`, agent tests |
-| Change suggestion generation | `app/services.py` | `processor.py`, service tests |
+| Add/change an endpoint | matching `app/api/` module | schema, test, UI |
+| Change routing | `resources/runtime/routing.json` | `services/routing.py`, agent tests |
+| Change suggestion generation | `app/services/agents.py` | `processor.py`, service tests |
 | Change confidence/governance | `PolicyEngine.evaluate()` | settings, API overview, tests |
-| Change persistence | model file | Alembic migration, repository/API |
+| Change record persistence | matching repository command/query | service/API test |
+| Change database schema | model file | Alembic migration, repository |
 | Change worker behavior | `app/worker.py` | `processor.py`, worker tests |
 | Change operator decisions | `app/decisions.py` | models, API, reporting views |
-| Change browser behavior | `app/static/app.js` | HTML/CSS, UI tests |
+| Change browser behavior | matching `app/static/js/` file | HTML/CSS, UI tests |
 | Add a pgAdmin report | migration/reporting view | dashboard SQL, pgAdmin guide |

@@ -27,38 +27,41 @@ Never commit a real `.env` file or secret.
 Maintainable classification and remediation behavior lives in:
 
 ```text
-app/resources/runtime_rules.json
+app/resources/runtime/
+├── routing.json
+├── agents.json
+├── knowledge.json
+├── lifecycle.json
+└── delivery.json
 ```
 
-It contains:
+The files are grouped by their runtime consumers:
 
-- Failure-domain keywords and weights.
-- Structured evidence fields.
-- Routing confidence and ambiguity rules.
-- Specialist signals and proposed action names.
-- Evidence requirements.
-- Change-plan and validation instructions.
-- Agent confidence bonuses and caps.
-- XPath locator priorities.
-- Knowledge retrieval limits.
-- Lifecycle category/severity mappings.
-- Worker and webhook batch sizes.
-- Webhook retry timing and CloudEvent metadata.
+- `routing.json`: failure-domain signals, structured hints, scoring, and
+  ambiguity rules used by `FailureRouter`.
+- `agents.json`: specialists, evidence requirements, change plans, confidence,
+  XPath behavior, and investigation fallback used by agent services.
+- `knowledge.json`: scan and result limits used by `KnowledgeService`.
+- `lifecycle.json`: environment, severity, category, and proposal mappings used
+  by `LifecycleRecorder`.
+- `delivery.json`: worker/webhook batches, retries, CloudEvent metadata, and
+  error limits used by the worker and delivery services.
 
-Python loads this file through `app/runtime_config.py`. Pydantic validates the
-complete structure. Missing categories, invalid confidence ranges, or invalid
-numeric values fail clearly instead of silently changing runtime behavior.
+Python combines these files through `app/runtime_config.py` into one
+`RuntimeRules` object. Pydantic validates the complete structure, including
+cross-file relationships. Missing categories, invalid confidence ranges, or
+invalid numeric values fail clearly instead of silently changing behavior.
 
-To use a different rules file:
+To use a different rules directory:
 
 ```bash
-RUNTIME_RULES_PATH=app/resources/runtime_rules.preprod.json make api
+RUNTIME_RULES_PATH=deploy/preprod/runtime make api
 ```
 
 Use the same setting for the worker:
 
 ```bash
-RUNTIME_RULES_PATH=app/resources/runtime_rules.preprod.json make worker
+RUNTIME_RULES_PATH=deploy/preprod/runtime make worker
 ```
 
 The API and worker must use the same rules version.
@@ -81,11 +84,11 @@ must not be silently replaced by a runtime JSON edit.
 
 ## Safe change process
 
-1. Copy `app/resources/runtime_rules.json`.
-2. Change one group of rules.
+1. Copy `app/resources/runtime/`.
+2. Change the relevant responsibility-based file.
 3. Point `RUNTIME_RULES_PATH` at the copy.
 4. Run `make test`.
 5. Submit representative incidents and inspect routing, confidence, and audit
    output.
 6. Review the configuration change like source code.
-7. Deploy the same rules file with both API and worker.
+7. Deploy the same rules directory with both API and worker.

@@ -11,7 +11,7 @@ class Settings(BaseSettings):
 
     service_name: str = "auto-healing-agent-runtime"
     app_version: str = "0.1.0"
-    runtime_rules_path: str = "app/resources/runtime_rules.json"
+    runtime_rules_path: str = "app/resources/runtime"
     api_profile: Literal["operations", "integration", "admin", "full"] = "operations"
     database_url: str = "postgresql+asyncpg://healing:healing@localhost:5432/healing"
     api_key: str = "change-me"

@@ -1,11 +1,20 @@
 """Load and validate maintainable runtime business rules from JSON."""
 
+import json
 from functools import lru_cache
 from pathlib import Path
 
 from pydantic import BaseModel, Field, model_validator
 
 from app.config import get_settings
+
+RULE_FILES = {
+    "routing": "routing.json",
+    "agents": "agents.json",
+    "knowledge": "knowledge.json",
+    "lifecycle": "lifecycle.json",
+    "delivery": "delivery.json",
+}
 
 
 class RoutingScoreConfig(BaseModel):
@@ -167,10 +176,28 @@ class RuntimeRules(BaseModel):
         return self
 
 
+def load_runtime_rules(path: Path) -> RuntimeRules:
+    """Load and validate rules from a directory of responsibility-based files.
+
+    A combined JSON file is still accepted for deployment compatibility, but
+    the checked-in configuration uses the split directory layout.
+    """
+    if path.is_file():
+        return RuntimeRules.model_validate_json(path.read_text())
+    if not path.is_dir():
+        raise FileNotFoundError(f"runtime rules path does not exist: {path}")
+
+    sections = {
+        section: json.loads((path / filename).read_text())
+        for section, filename in RULE_FILES.items()
+    }
+    return RuntimeRules.model_validate(sections)
+
+
 @lru_cache
 def get_runtime_rules() -> RuntimeRules:
-    """Load, validate, and cache the checked-in runtime rules document."""
+    """Resolve the configured rules path and cache the validated rule set."""
     path = Path(get_settings().runtime_rules_path)
     if not path.is_absolute():
         path = Path(__file__).parents[1] / path
-    return RuntimeRules.model_validate_json(path.read_text())
+    return load_runtime_rules(path)

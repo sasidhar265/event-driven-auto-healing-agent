@@ -1,0 +1,38 @@
+{
+  "environments": [
+    "dev",
+    "test",
+    "preprod",
+    "prod"
+  ],
+  "default_environment": "dev",
+  "severity_map": {
+    "info": "LOW",
+    "warning": "MEDIUM",
+    "error": "HIGH",
+    "critical": "CRITICAL"
+  },
+  "default_severity": "MEDIUM",
+  "category_map": {
+    "ui": "UI",
+    "api": "API",
+    "logic": "FUNCTIONAL",
+    "functional": "FUNCTIONAL",
+    "test_data": "DATA",
+    "database": "DATA",
+    "infrastructure": "INFRA",
+    "dependency": "INFRA",
+    "security": "SECURITY",
+    "performance": "PERFORMANCE"
+  },
+  "default_category": "UNKNOWN",
+  "self_heal_type_map": {
+    "ui": "LOCATOR",
+    "test_data": "TEST_DATA",
+    "logic": "MINOR_LOGIC",
+    "functional": "ASSERTION"
+  },
+  "workflow_type": "FAILURE_ANALYSIS",
+  "runtime_actor": "event-runtime",
+  "model_version": "deterministic-or-enterprise-gateway"
+}

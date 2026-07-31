@@ -1,0 +1,10 @@
+{
+  "worker_batch_size": 20,
+  "webhook_batch_size": 20,
+  "retry_base_seconds": 2,
+  "retry_max_seconds": 3600,
+  "cloud_event_source": "/auto-healing-agent-runtime",
+  "cloud_event_type": "suggestion.ready",
+  "dispatcher_actor": "webhook-dispatcher",
+  "error_message_max_length": 2000
+}

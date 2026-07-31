@@ -4,6 +4,11 @@ from pathlib import Path
 STATIC = Path(__file__).parents[1] / "app" / "static"
 
 
+def javascript_source() -> str:
+    """Return all ordered browser feature scripts as one searchable source."""
+    return "\n".join(path.read_text() for path in sorted((STATIC / "js").glob("*.js")))
+
+
 def test_operations_ui_contains_core_workflows():
     html = (STATIC / "index.html").read_text()
     for element_id in (
@@ -19,7 +24,7 @@ def test_operations_ui_contains_core_workflows():
 
 
 def test_operations_ui_defines_failure_domains_and_real_api_calls():
-    javascript = (STATIC / "app.js").read_text()
+    javascript = javascript_source()
     for category in (
         "ui", "api", "logic", "functional", "test_data", "database",
         "infrastructure", "dependency", "security", "performance",
@@ -32,7 +37,7 @@ def test_operations_ui_defines_failure_domains_and_real_api_calls():
 
 def test_suggestion_filters_cover_lifecycle_statuses_and_show_counts():
     html = (STATIC / "index.html").read_text()
-    javascript = (STATIC / "app.js").read_text()
+    javascript = javascript_source()
 
     for status in ("all", "accepted", "rejected"):
         assert f'data-status="{status}"' in html
@@ -46,7 +51,7 @@ def test_suggestion_filters_cover_lifecycle_statuses_and_show_counts():
 
 def test_decision_model_renders_live_confidence_classifications():
     html = (STATIC / "index.html").read_text()
-    javascript = (STATIC / "app.js").read_text()
+    javascript = javascript_source()
 
     for classification in ("suppressed", "review", "ready"):
         assert f'id="decision-{classification}"' in html
@@ -61,7 +66,7 @@ def test_decision_model_renders_live_confidence_classifications():
 
 def test_audit_trail_supports_time_environment_and_correlation_filters():
     html = (STATIC / "index.html").read_text()
-    javascript = (STATIC / "app.js").read_text()
+    javascript = javascript_source()
 
     for element_id in (
         'id="audit-filter-form"',
@@ -95,7 +100,7 @@ def test_audit_trail_supports_time_environment_and_correlation_filters():
 
 def test_detail_actions_use_modal_overlays():
     html = (STATIC / "index.html").read_text()
-    javascript = (STATIC / "app.js").read_text()
+    javascript = javascript_source()
 
     assert 'id="details-dialog"' in html
     assert 'id="details-content"' in html
@@ -119,7 +124,7 @@ def test_detail_actions_use_modal_overlays():
 
 def test_connection_action_shows_safe_runtime_and_database_details():
     html = (STATIC / "index.html").read_text()
-    javascript = (STATIC / "app.js").read_text()
+    javascript = javascript_source()
 
     for element_id in (
         'id="connection-details"',
@@ -150,7 +155,7 @@ def test_bootstrap_is_loaded_and_used_for_modals_and_forms():
 
 def test_every_interactive_control_uses_bootstrap_foundations():
     html = (STATIC / "index.html").read_text()
-    javascript = (STATIC / "app.js").read_text()
+    javascript = javascript_source()
     markup = f"{html}\n{javascript}"
 
     button_classes = re.findall(r'<button[^>]*class="([^"]+)"', markup)

@@ -1,0 +1,6 @@
+{
+  "item_scan_limit": 50,
+  "reference_scan_limit": 100,
+  "result_limit": 5,
+  "accepted_reference_bonus": 1
+}
