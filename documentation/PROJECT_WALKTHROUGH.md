@@ -372,7 +372,8 @@ migrations remain responsible for creating and evolving tables and views.
 
 Coordinates knowledge retrieval, routing, specialist execution, optional AI
 enrichment, policy evaluation, suggestion persistence, lifecycle recording,
-and ready-webhook creation.
+and ready-webhook creation. Database locking and writes are delegated to
+`app/repositories/processing/`, keeping the processor focused on orchestration.
 
 ### Domain services: `app/services/`
 

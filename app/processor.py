@@ -3,14 +3,12 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.art_lifecycle import LifecycleRecorder
-from app.models import (
-    AuditLog, Event, EventStatus, Suggestion, SuggestionStatus,
-    WebhookDelivery, WebhookSubscription,
-)
+from app.models import Event, EventStatus, Suggestion, SuggestionStatus
+from app.repositories.processing import commands as processing_commands
+from app.repositories.processing import queries as processing_queries
 from app.runtime_config import get_runtime_rules
 from app.services import (
     AIService,
@@ -29,9 +27,7 @@ async def process_event(session: AsyncSession, event_id: uuid.UUID) -> None:
     processing failures mark the event failed and are re-raised for the worker.
     """
     rules = get_runtime_rules()
-    event = await session.scalar(
-        select(Event).where(Event.id == event_id).with_for_update()
-    )
+    event = await processing_queries.lock_event(session, event_id)
     if not event or event.status == EventStatus.COMPLETED:
         return
 
@@ -109,36 +105,9 @@ async def _create_suggestion(
         event,
         candidate,
     )
-    suggestion = Suggestion(
-        event_id=event.id,
-        tenant_id=event.tenant_id,
-        agent_type=candidate.agent_type,
-        title=candidate.title,
-        rationale=candidate.rationale,
-        proposed_changes=candidate.proposed_changes,
-        evidence=evidence,
-        confidence=confidence,
-        policy_result=policy_result,
-        status=status,
+    return await processing_commands.create_suggestion(
+        session, event, candidate, evidence, status, policy_result, confidence
     )
-    session.add(suggestion)
-    await session.flush()
-
-    session.add(
-        AuditLog(
-            tenant_id=event.tenant_id,
-            actor=f"agent:{candidate.agent_type}",
-            action="suggestion.created",
-            resource_type="suggestion",
-            resource_id=str(suggestion.id),
-            details={
-                "event_id": str(event.id),
-                "confidence": confidence,
-                "status": status.value,
-            },
-        )
-    )
-    return suggestion
 
 
 async def _queue_ready_webhooks(
@@ -151,14 +120,9 @@ async def _queue_ready_webhooks(
     if suggestion.status != SuggestionStatus.READY:
         return
 
-    subscriptions = (
-        await session.scalars(
-            select(WebhookSubscription).where(
-                WebhookSubscription.tenant_id == event.tenant_id,
-                WebhookSubscription.active.is_(True),
-            )
-        )
-    ).all()
+    subscriptions = await processing_queries.list_active_subscriptions(
+        session, event.tenant_id
+    )
 
     for subscription in subscriptions:
         accepts_ready_events = (
@@ -166,13 +130,7 @@ async def _queue_ready_webhooks(
             or "*" in subscription.event_types
         )
         if accepts_ready_events:
-            session.add(
-                WebhookDelivery(
-                    tenant_id=event.tenant_id,
-                    subscription_id=subscription.id,
-                    suggestion_id=suggestion.id,
-                )
-            )
+            processing_commands.queue_delivery(session, event, suggestion, subscription)
 
 
 def _add_audit_log(
@@ -184,13 +142,4 @@ def _add_audit_log(
     details: dict[str, Any],
 ) -> None:
     """Stage an event-level audit record in the caller's transaction."""
-    session.add(
-        AuditLog(
-            tenant_id=event.tenant_id,
-            actor=actor,
-            action=action,
-            resource_type="event",
-            resource_id=str(event.id),
-            details=details,
-        )
-    )
+    processing_commands.add_event_audit(session, event, actor, action, details)

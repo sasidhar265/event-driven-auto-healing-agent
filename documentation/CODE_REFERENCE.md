@@ -202,22 +202,18 @@ coordinate larger transactions may continue staging several model changes in
 their caller-owned transaction. Table and view creation remains exclusively in
 Alembic migrations.
 
-### `app/models.py`
+### `app/models/`
 
-Contains SQLAlchemy mappings for the core PostgreSQL tables.
+Organizes core SQLAlchemy mappings by domain while `app.models.__init__`
+preserves simple imports such as `from app.models import Event`.
 
-- `Event`: incoming incident and processing state.
-- `Suggestion`: proposed remediation, confidence, policy result, and state.
-- `Policy`: tenant governance configuration.
-- `KnowledgeItem`: searchable tenant knowledge.
-- `AuditLog`: immutable action history.
-- `Outbox`: transactional work queue consumed by the worker.
-- `WebhookSubscription` / `WebhookDelivery`: downstream delivery state.
-- `IntegrationIngestion` / `IntegrationPublication`: optional external-table
-  bridge checkpoints.
-- `SuggestionDecision`: operator acceptance or rejection.
-- `RemediationReference`: reusable learning derived from decisions.
-- `EventStatus` and `SuggestionStatus`: allowed state values.
+- `base.py`: shared SQLAlchemy metadata root.
+- `events.py`: events, suggestions, and their status enums.
+- `governance.py`: policies and knowledge items.
+- `operations.py`: audit log and transactional outbox.
+- `delivery.py`: webhook subscriptions and deliveries.
+- `integrations.py`: optional bridge checkpoints.
+- `learning.py`: operator decisions and reusable remediation references.
 
 ### `app/art_models.py`
 
@@ -276,6 +272,10 @@ Provides one governed persistence implementation for all ART lifecycle models.
 - `_queue_ready_webhooks()` creates delivery rows only for ready suggestions
   and matching active subscriptions.
 - `_add_audit_log()` adds processing audit entries.
+
+Database locks, suggestion/audit creation, subscription reads, and delivery
+creation are implemented in `app/repositories/processing/`. The processor now
+focuses on orchestration and owns the encompassing transaction boundary.
 
 ### `app/services/`
 
