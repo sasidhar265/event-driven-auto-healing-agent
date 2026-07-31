@@ -410,7 +410,7 @@ library.
 
 - `app/static/index.html`: page structure and Bootstrap controls.
 - `app/static/js/`: feature-specific API calls, rendering, filtering, modals,
-  and interaction.
+  interaction, and a live API Explorer backed by `/openapi.json`.
 - `app/static/styles.css`: ART appearance and responsive layout.
 
 ### Migrations and tests

@@ -1,7 +1,7 @@
 # ART feedback implementation
 
 This document maps `ART_Feedback.docx` to the implementation delivered in
-migration `0008`.
+migrations `0008` and `0009`.
 
 ## Requirement coverage
 
@@ -30,6 +30,20 @@ migration `0008`.
 | Standard naming | Lowercase snake_case tables, fields, paths, and identifiers |
 | Standard timestamps | UTC `created_at`, `updated_at`, `started_at`, and `completed_at` as applicable |
 
+## Database contract compliance
+
+Migration `0009_align_art_feedback_schema.py` aligns the deployed schema with
+the SQL contract embedded in `ART_Feedback.docx`. It introduces the document's
+nine native PostgreSQL enum types, converts confidence and risk values to
+`NUMERIC(5,4)`, and adds the recommended lookup, governance, status, component,
+and external-run indexes without discarding existing records.
+
+Automated contract tests verify all 13 ART tables, mandatory tenant and
+correlation context, enum-backed controlled values, and numeric precision. The
+optional inbox and outbox retain `environment` as an additional isolation field
+because the narrative requirements mandate environment awareness across
+ART-owned records, even though those two sample table definitions omit it.
+
 ## API conventions
 
 All endpoints are under `/v1/art`. They require:
@@ -49,40 +63,31 @@ Every create response includes:
 - `status`
 - `created_at`
 - `updated_at` when the resource supports updates
-- `data` containing the complete record
+- `data` containing the complete record and a `related` object populated from
+  the supporting PostgreSQL tables for the same tenant and correlation
 
-Each collection supports `POST` and tenant-scoped `GET`. Every resource also
-supports `GET /{resource_id}`.
+The public contract now follows the four resource paths explicitly recommended
+in `ART_Feedback.docx`. Each path supports `POST` and tenant-scoped `GET`.
 
-| Resource | Path |
-|---|---|
-| Failure events | `/v1/art/failure-events` |
-| Agent workflows | `/v1/art/agent-runs` |
-| Agent steps | `/v1/art/agent-run-steps` |
-| Decision journals | `/v1/art/decision-journals` |
-| Impact assessments | `/v1/art/impact-assessments` |
-| Impact dependencies | `/v1/art/impact-dependencies` |
-| Test selection decisions | `/v1/art/test-selection-decisions` |
-| Execution intents | `/v1/art/execution-intents` |
-| Execution result references | `/v1/art/execution-result-refs` |
-| Self-heal proposals | `/v1/art/self-heal-proposals` |
-| Outcome feedback | `/v1/art/outcome-feedback` |
-| Event inbox | `/v1/art/event-inbox` |
-| Event outbox | `/v1/art/event-outbox` |
+| Public resource | Path | Supporting table data returned by `GET` |
+|---|---|---|
+| Failure events | `/v1/art/failure-events` | `event_inbox`, `event_outbox` |
+| Agent workflows | `/v1/art/agent-runs` | `agent_run_steps`, `agent_decision_journals` |
+| Impact assessments | `/v1/art/impact-assessments` | `impact_dependencies` |
+| Execution intents | `/v1/art/execution-intents` | `test_selection_decisions`, `execution_result_refs`, `self_heal_proposals`, `outcome_feedback`, `event_outbox` |
 
 Collection reads accept `correlation_id`, `environment`, and `limit` query
-parameters. The complete lifecycle trace is:
+parameters. Use `correlation_id` to retrieve one lifecycle without calling
+separate table-level APIs:
 
 ```text
-GET /v1/art/correlations/{correlation_id}
+GET /v1/art/agent-runs?correlation_id=<uuid>
 ```
 
-Agent runs, execution intents, and self-heal proposals support governed state
-updates:
-
-```text
-PATCH /v1/art/{resource}/{resource_id}/state
-```
+The former table-level routes remain available internally for workers and
+backwards compatibility, but are intentionally omitted from Swagger and the UI
+API Explorer. PostgreSQL tables remain separate for referential integrity and
+maintainability; only the external API surface is consolidated.
 
 ## Automatic lifecycle recording
 

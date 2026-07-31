@@ -21,7 +21,12 @@
         <button class="btn nav-item" data-view="simulate"><span>⌁</span> Incident intake</button>
         <button class="btn nav-item" data-view="suggestions"><span>✦</span> Suggestions</button>
         <button class="btn nav-item" data-view="audit"><span>≡</span> Audit trail</button>
+        <button class="btn nav-item" data-view="api-explorer"><span>{ }</span> API explorer</button>
       </nav>
+      <div class="nav-actions" aria-label="Runtime actions">
+        <button class="btn icon-button" id="refresh-button" title="Refresh data" aria-label="Refresh data">↻</button>
+        <button class="btn btn-outline-secondary button secondary" id="settings-button">Connection</button>
+      </div>
       <div class="sidebar-foot">
         <div class="runtime-state"><i></i><span>Suggestion-only mode</span></div>
         <p>No production changes are executed.</p>
@@ -29,17 +34,6 @@
     </aside>
 
     <main>
-      <header class="topbar">
-        <div>
-          <p class="eyebrow">EVENT-DRIVEN AUTO-HEALING</p>
-          <h1 id="page-title">Runtime overview</h1>
-        </div>
-        <div class="top-actions">
-          <button class="btn icon-button" id="refresh-button" title="Refresh data" aria-label="Refresh data">↻</button>
-          <button class="btn btn-outline-secondary button secondary" id="settings-button">Connection</button>
-        </div>
-      </header>
-
       <div id="connection-banner" class="connection-banner hidden">
         <span>Unable to reach the runtime.</span>
         <button class="btn btn-link" id="banner-settings">Check connection</button>
@@ -128,6 +122,21 @@
             <div class="safety-note"><b>Safety boundary</b><p>Agents propose changes. Your deployment and approval systems remain authoritative.</p></div>
           </article>
         </div>
+      </section>
+
+      <section id="api-explorer" class="view">
+        <div class="section-intro">
+          <div><p class="eyebrow">ART LIFECYCLE</p><h2>Lifecycle APIs</h2><p>See the consolidated ART lifecycle operations. Open the interactive documentation to explore every API in the application.</p></div>
+          <a class="btn btn-primary button primary" id="swagger-link" href="/docs" target="_blank" rel="noopener">Open all interactive API docs</a>
+        </div>
+        <article class="panel">
+          <div class="panel-head">
+            <div><p class="eyebrow">LIVE OPENAPI CONTRACT</p><h3>ART lifecycle endpoints</h3></div>
+            <button class="btn btn-outline-secondary button secondary" id="reload-apis" type="button">Reload APIs</button>
+          </div>
+          <p class="api-help">Only <code>/v1/art/...</code> operations are shown here. Swagger contains the complete active API profile.</p>
+          <div id="api-list" class="api-list empty-state">Open this screen to load the API contract.</div>
+        </article>
       </section>
 
       <section id="simulate" class="view">
@@ -318,6 +327,7 @@
   <script src="/ui/js/suggestions.js" defer></script>
   <script src="/ui/js/audit.js" defer></script>
   <script src="/ui/js/settings.js" defer></script>
+  <script src="/ui/js/api-explorer.js" defer></script>
   <script src="/ui/js/main.js" defer></script>
 </body>
 </html>

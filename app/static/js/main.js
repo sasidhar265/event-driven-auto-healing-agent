@@ -19,6 +19,7 @@ function bindEvents() {
   $("#settings-form").addEventListener("submit", saveSettings);
   $("#refresh-button").addEventListener("click", () => navigate(location.hash.slice(1) || "dashboard"));
   $("#export-audit").addEventListener("click", exportAudit);
+  $("#reload-apis").addEventListener("click", loadApis);
   $$(".filter").forEach(button => button.addEventListener("click", () => {
     suggestionFilter = button.dataset.status.toLowerCase();
     $$(".filter").forEach(item => item.classList.toggle("active", item === button));

@@ -8,33 +8,23 @@ from app.main import create_application
 
 app = create_application("full")
 
-ART_COLLECTIONS = {
+PUBLIC_ART_COLLECTIONS = {
     "failure-events",
     "agent-runs",
-    "agent-run-steps",
-    "decision-journals",
     "impact-assessments",
-    "impact-dependencies",
-    "test-selection-decisions",
     "execution-intents",
-    "execution-result-refs",
-    "self-heal-proposals",
-    "outcome-feedback",
-    "event-inbox",
-    "event-outbox",
 }
 
 
-def test_openapi_exposes_every_feedback_resource():
+def test_openapi_exposes_only_requirement_facing_art_resources():
     paths = app.openapi()["paths"]
+    art_paths = {path for path in paths if path.startswith("/v1/art/")}
 
-    for resource in ART_COLLECTIONS:
+    for resource in PUBLIC_ART_COLLECTIONS:
         path = paths[f"/v1/art/{resource}"]
         assert "post" in path
         assert "get" in path
-        assert f"/v1/art/{resource}/{{record_id}}" in paths
-
-    assert "/v1/art/correlations/{correlation_id}" in paths
+    assert art_paths == {f"/v1/art/{resource}" for resource in PUBLIC_ART_COLLECTIONS}
 
 
 def test_failure_event_requires_enterprise_context():

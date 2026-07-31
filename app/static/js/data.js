@@ -177,7 +177,8 @@ const scenarios = {
 
 const titles = {
   dashboard: "Runtime overview", simulate: "Incident intake",
-  suggestions: "Remediation suggestions", audit: "Audit trail"
+  suggestions: "Remediation suggestions", audit: "Audit trail",
+  "api-explorer": "API explorer"
 };
 let activeScenario = "ui";
 let suggestionFilter = "all";

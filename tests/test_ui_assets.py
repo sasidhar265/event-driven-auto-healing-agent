@@ -14,6 +14,7 @@ def test_operations_ui_contains_core_workflows():
     for element_id in (
         'id="dashboard"', 'id="simulate"', 'id="suggestions"',
         'id="audit"', 'id="event-form"',
+        'id="api-explorer"',
     ):
         assert element_id in html
     assert 'data-view="governance"' not in html
@@ -21,6 +22,49 @@ def test_operations_ui_contains_core_workflows():
     assert 'id="policy-form"' not in html
     assert 'id="tenant-label"' not in html
     assert 'id="setting-tenant"' not in html
+
+
+def test_api_explorer_uses_the_live_openapi_contract():
+    html = (STATIC / "index.html").read_text()
+    javascript = javascript_source()
+
+    assert 'data-view="api-explorer"' in html
+    assert 'id="api-list"' in html
+    assert 'id="swagger-link"' in html
+    assert 'api("/openapi.json")' in javascript
+    assert '.filter(([path]) => path.startsWith("/v1/art/"))' in javascript
+    assert '"GET /v1/art/agent-runs"' in javascript
+    assert "Open all interactive API docs" in html
+    assert "When to use" in javascript
+    assert "Database usage" in javascript
+    assert "Request / filters" in javascript
+    assert "agent_run_steps and agent_decision_journals" in javascript
+
+
+def test_ui_uses_layered_glass_surfaces():
+    styles = (STATIC / "styles.css").read_text()
+
+    assert "--glass:" in styles
+    assert "backdrop-filter: blur(20px)" in styles
+    assert "--glass-shadow:" in styles
+    assert ".modal-content" in styles
+    assert "background-attachment: fixed" in styles
+
+
+def test_primary_navigation_uses_top_glass_layout():
+    html = (STATIC / "index.html").read_text()
+    styles = (STATIC / "styles.css").read_text()
+
+    sidebar = html.split('<aside class="sidebar">', 1)[1].split("</aside>", 1)[0]
+    assert 'class="nav-actions"' in sidebar
+    assert 'id="refresh-button"' in sidebar
+    assert 'id="settings-button"' in sidebar
+    assert 'class="topbar"' not in html
+    assert 'id="page-title"' not in html
+    assert "Top navigation preview" in styles
+    assert "position: sticky" in styles
+    assert "flex-direction: row" in styles
+    assert "rgba(17,31,25,.94)" in styles
 
 
 def test_operations_ui_defines_failure_domains_and_real_api_calls():
@@ -108,9 +152,13 @@ def test_detail_actions_use_modal_overlays():
     assert "showSuggestionDetails(item)" in javascript
     assert "/trace`" in javascript
     assert "Incident processing logs" in javascript
-    assert "View structured context" in javascript
+    assert "Inspect structured context" in javascript
     assert "stage.api" in javascript
     assert "stage.data" in javascript
+    assert 'id="trace-search"' in javascript
+    assert 'id="trace-level-filter"' in javascript
+    assert "filterTraceLogs" in javascript
+    assert "trace-visible-count" in javascript
     assert "<dt>Identified by</dt>" in javascript
     assert "<dt>Environment</dt>" in javascript
     assert "Identified by ${escapeHtml(item.source" in javascript

@@ -81,7 +81,7 @@ async def list_impact_assessments(
     limit: PageLimit = api_settings.api_default_limit,
 ):
     """List tenant impact assessments with lifecycle filters."""
-    return await repository(session, auth).list(
+    return await repository(session, auth).list_public_resource(
         ImpactAssessment,
         correlation_id=correlation_id,
         environment=environment,

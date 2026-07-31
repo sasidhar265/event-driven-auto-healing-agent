@@ -5,8 +5,8 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, func
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, func
+from sqlalchemy.dialects.postgresql import ENUM, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models import Base
@@ -25,11 +25,43 @@ class ArtStatus(str, enum.Enum):
     SKIPPED = "SKIPPED"
 
 
+def art_enum(name: str, *values: str) -> ENUM:
+    """Reference an ART enum created by the requirement-alignment migration."""
+    return ENUM(*values, name=name, schema="art", create_type=False)
+
+
+ART_ENVIRONMENT = art_enum("art_environment", "dev", "test", "preprod", "prod")
+ART_STATUS = art_enum("art_status", *(status.value for status in ArtStatus))
+ART_CHANGE_TYPE = art_enum("art_change_type", "code", "config", "infra", "data", "failure")
+ART_SEVERITY = art_enum("art_severity", "LOW", "MEDIUM", "HIGH", "CRITICAL")
+ART_FAILURE_CATEGORY = art_enum(
+    "art_failure_category", "UI", "API", "FUNCTIONAL", "DATA", "PERFORMANCE",
+    "SECURITY", "BATCH", "MAINFRAME", "INFRA", "UNKNOWN",
+)
+ART_WORKFLOW_TYPE = art_enum(
+    "art_workflow_type", "CHANGE_ANALYSIS", "FAILURE_ANALYSIS", "IMPACT_ANALYSIS",
+    "TEST_SELECTION", "EXECUTION_ORCHESTRATION", "SELF_MAINTENANCE",
+)
+ART_DECISION_TYPE = art_enum(
+    "art_decision_type", "IMPACT_ASSESSMENT", "TEST_SELECTION", "TEST_SEQUENCING",
+    "EXECUTION_INTENT", "SELF_HEAL_PROPOSAL", "OUTCOME_EVALUATION",
+)
+ART_SELF_HEAL_TYPE = art_enum(
+    "art_self_heal_type", "LOCATOR", "TEST_DATA", "ASSERTION", "MINOR_LOGIC",
+    "CONFIG_DEPENDENCY",
+)
+ART_APPROVAL_STATUS = art_enum(
+    "art_approval_status", "NOT_REQUIRED", "PENDING", "APPROVED", "REJECTED",
+    "EXPIRED", "CANCELLED",
+)
+SCORE = Numeric(5, 4)
+
+
 class ArtRecord:
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     correlation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
     tenant_id: Mapped[str] = mapped_column(String(100), index=True)
-    environment: Mapped[str] = mapped_column(String(20), index=True)
+    environment: Mapped[str] = mapped_column(ART_ENVIRONMENT, index=True)
 
 
 class TimestampedRecord:
@@ -48,9 +80,9 @@ class FailureEvent(ArtRecord, TimestampedRecord, Base):
     test_id: Mapped[str | None] = mapped_column(String(150))
     request_id: Mapped[str | None] = mapped_column(String(150))
     source_system: Mapped[str] = mapped_column(String(150))
-    failure_category: Mapped[str] = mapped_column(String(30), default="UNKNOWN")
+    failure_category: Mapped[str] = mapped_column(ART_FAILURE_CATEGORY, default="UNKNOWN")
     failure_subtype: Mapped[str | None] = mapped_column(String(150))
-    severity: Mapped[str] = mapped_column(String(20), default="MEDIUM")
+    severity: Mapped[str] = mapped_column(ART_SEVERITY, default="MEDIUM")
     api_endpoint: Mapped[str | None] = mapped_column(Text)
     status_code: Mapped[int | None] = mapped_column(Integer)
     error_message: Mapped[str | None] = mapped_column(Text)
@@ -65,10 +97,10 @@ class AgentRun(ArtRecord, TimestampedRecord, Base):
     __tablename__ = "agent_runs"
     __table_args__ = {"schema": "art"}
 
-    workflow_type: Mapped[str] = mapped_column(String(50))
+    workflow_type: Mapped[str] = mapped_column(ART_WORKFLOW_TYPE)
     trigger_event_type: Mapped[str | None] = mapped_column(String(100))
     source_event_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
-    status: Mapped[str] = mapped_column(String(30), default=ArtStatus.RECEIVED.value)
+    status: Mapped[str] = mapped_column(ART_STATUS, default=ArtStatus.RECEIVED.value)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     execution_time_ms: Mapped[int | None] = mapped_column(Integer)
@@ -93,8 +125,8 @@ class AgentRunStep(ArtRecord, TimestampedRecord, Base):
     agent_name: Mapped[str] = mapped_column(String(150))
     step_name: Mapped[str] = mapped_column(String(150))
     step_sequence: Mapped[int] = mapped_column(Integer)
-    status: Mapped[str] = mapped_column(String(30), default=ArtStatus.RECEIVED.value)
-    confidence_score: Mapped[float | None] = mapped_column(Float)
+    status: Mapped[str] = mapped_column(ART_STATUS, default=ArtStatus.RECEIVED.value)
+    confidence_score: Mapped[float | None] = mapped_column(SCORE)
     confidence_reason: Mapped[str | None] = mapped_column(Text)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -116,13 +148,13 @@ class AgentDecisionJournal(ArtRecord, Base):
     agent_step_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("art.agent_run_steps.id", ondelete="SET NULL")
     )
-    decision_type: Mapped[str] = mapped_column(String(50))
+    decision_type: Mapped[str] = mapped_column(ART_DECISION_TYPE)
     decision_summary: Mapped[str] = mapped_column(Text)
     rationale: Mapped[str | None] = mapped_column(Text)
     inputs_ref: Mapped[str | None] = mapped_column(Text)
     context_ref: Mapped[str | None] = mapped_column(Text)
     output_ref: Mapped[str | None] = mapped_column(Text)
-    confidence_score: Mapped[float | None] = mapped_column(Float)
+    confidence_score: Mapped[float | None] = mapped_column(SCORE)
     confidence_reason: Mapped[str | None] = mapped_column(Text)
     evidence_refs: Mapped[list[Any]] = mapped_column(JSONB, default=list)
     policy_decision_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
@@ -139,7 +171,7 @@ class ImpactAssessment(ArtRecord, Base):
     agent_run_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("art.agent_runs.id", ondelete="SET NULL")
     )
-    impact_source: Mapped[str] = mapped_column(String(30))
+    impact_source: Mapped[str] = mapped_column(ART_CHANGE_TYPE)
     source_event_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     component_id: Mapped[str | None] = mapped_column(String(150))
     component_name: Mapped[str] = mapped_column(String(250))
@@ -147,9 +179,9 @@ class ImpactAssessment(ArtRecord, Base):
     service_name: Mapped[str | None] = mapped_column(String(250))
     business_capability_id: Mapped[str | None] = mapped_column(String(150))
     business_capability_name: Mapped[str | None] = mapped_column(String(250))
-    impact_level: Mapped[str] = mapped_column(String(20))
-    risk_score: Mapped[float | None] = mapped_column(Float)
-    confidence_score: Mapped[float | None] = mapped_column(Float)
+    impact_level: Mapped[str] = mapped_column(ART_SEVERITY)
+    risk_score: Mapped[float | None] = mapped_column(SCORE)
+    confidence_score: Mapped[float | None] = mapped_column(SCORE)
     description: Mapped[str | None] = mapped_column(Text)
     affected_test_tags: Mapped[list[Any]] = mapped_column(JSONB, default=list)
     evidence_refs: Mapped[list[Any]] = mapped_column(JSONB, default=list)
@@ -168,7 +200,7 @@ class ImpactDependency(ArtRecord, Base):
     dependent_component_name: Mapped[str] = mapped_column(String(250))
     dependency_direction: Mapped[str] = mapped_column(String(50))
     dependency_type: Mapped[str | None] = mapped_column(String(100))
-    dependency_confidence: Mapped[float | None] = mapped_column(Float)
+    dependency_confidence: Mapped[float | None] = mapped_column(SCORE)
     source_of_dependency: Mapped[str | None] = mapped_column(String(100))
     knowledge_graph_ref: Mapped[str | None] = mapped_column(Text)
     description: Mapped[str | None] = mapped_column(Text)
@@ -183,14 +215,14 @@ class TestSelectionDecision(ArtRecord, Base):
         ForeignKey("art.agent_runs.id", ondelete="SET NULL")
     )
     selection_strategy: Mapped[str] = mapped_column(String(100))
-    risk_score: Mapped[float | None] = mapped_column(Float)
-    confidence_score: Mapped[float | None] = mapped_column(Float)
+    risk_score: Mapped[float | None] = mapped_column(SCORE)
+    confidence_score: Mapped[float | None] = mapped_column(SCORE)
     selected_tests: Mapped[list[Any]] = mapped_column(JSONB)
     skipped_tests: Mapped[list[Any]] = mapped_column(JSONB, default=list)
     mandatory_tests: Mapped[list[Any]] = mapped_column(JSONB, default=list)
     affected_components: Mapped[list[Any]] = mapped_column(JSONB, default=list)
     affected_capabilities: Mapped[list[Any]] = mapped_column(JSONB, default=list)
-    risk_coverage: Mapped[float | None] = mapped_column(Float)
+    risk_coverage: Mapped[float | None] = mapped_column(SCORE)
     estimated_duration_ms: Mapped[int | None] = mapped_column(Integer)
     rationale: Mapped[str | None] = mapped_column(Text)
     evidence_refs: Mapped[list[Any]] = mapped_column(JSONB, default=list)
@@ -214,12 +246,12 @@ class ExecutionIntent(ArtRecord, TimestampedRecord, Base):
     selected_tests: Mapped[list[Any]] = mapped_column(JSONB)
     sequence_plan: Mapped[list[Any]] = mapped_column(JSONB, default=list)
     constraints: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
-    status: Mapped[str] = mapped_column(String(30), default=ArtStatus.RECEIVED.value)
+    status: Mapped[str] = mapped_column(ART_STATUS, default=ArtStatus.RECEIVED.value)
     policy_decision_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     policy_version: Mapped[str | None] = mapped_column(String(100))
     approval_required: Mapped[bool] = mapped_column(Boolean, default=False)
     approval_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
-    approval_status: Mapped[str] = mapped_column(String(30), default="NOT_REQUIRED")
+    approval_status: Mapped[str] = mapped_column(ART_APPROVAL_STATUS, default="NOT_REQUIRED")
     requested_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -239,7 +271,7 @@ class ExecutionResultRef(ArtRecord, Base):
         ForeignKey("art.execution_intents.id", ondelete="SET NULL")
     )
     external_run_id: Mapped[str | None] = mapped_column(String(150))
-    status: Mapped[str] = mapped_column(String(30))
+    status: Mapped[str] = mapped_column(ART_STATUS)
     passed_count: Mapped[int | None] = mapped_column(Integer)
     failed_count: Mapped[int | None] = mapped_column(Integer)
     skipped_count: Mapped[int | None] = mapped_column(Integer)
@@ -261,16 +293,16 @@ class SelfHealProposal(ArtRecord, TimestampedRecord, Base):
     failure_event_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("art.failure_events.id", ondelete="SET NULL")
     )
-    proposal_type: Mapped[str] = mapped_column(String(50))
+    proposal_type: Mapped[str] = mapped_column(ART_SELF_HEAL_TYPE)
     proposal_summary: Mapped[str] = mapped_column(Text)
     suggested_change: Mapped[dict[str, Any]] = mapped_column(JSONB)
     proposed_diff: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
-    confidence_score: Mapped[float | None] = mapped_column(Float)
+    confidence_score: Mapped[float | None] = mapped_column(SCORE)
     confidence_reason: Mapped[str | None] = mapped_column(Text)
     approval_required: Mapped[bool] = mapped_column(Boolean, default=True)
     approval_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
-    approval_status: Mapped[str] = mapped_column(String(30), default="PENDING")
-    applied_status: Mapped[str] = mapped_column(String(30), default=ArtStatus.RECEIVED.value)
+    approval_status: Mapped[str] = mapped_column(ART_APPROVAL_STATUS, default="PENDING")
+    applied_status: Mapped[str] = mapped_column(ART_STATUS, default=ArtStatus.RECEIVED.value)
     applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     applied_by: Mapped[str | None] = mapped_column(String(150))
     rollback_ref: Mapped[str | None] = mapped_column(Text)
@@ -312,7 +344,7 @@ class ArtEventInbox(ArtRecord, Base):
     topic_name: Mapped[str] = mapped_column(String(150))
     event_type: Mapped[str] = mapped_column(String(100))
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB)
-    processing_status: Mapped[str] = mapped_column(String(30), default=ArtStatus.RECEIVED.value)
+    processing_status: Mapped[str] = mapped_column(ART_STATUS, default=ArtStatus.RECEIVED.value)
     received_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -327,7 +359,7 @@ class ArtEventOutbox(ArtRecord, Base):
     topic_name: Mapped[str] = mapped_column(String(150))
     event_type: Mapped[str] = mapped_column(String(100))
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB)
-    publish_status: Mapped[str] = mapped_column(String(30), default=ArtStatus.RECEIVED.value)
+    publish_status: Mapped[str] = mapped_column(ART_STATUS, default=ArtStatus.RECEIVED.value)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     error_message: Mapped[str | None] = mapped_column(Text)

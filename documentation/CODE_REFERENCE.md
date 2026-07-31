@@ -399,6 +399,7 @@ build step:
 - `suggestions.js`: suggestion rendering and decisions.
 - `audit.js`: audit retrieval, filters, and date controls.
 - `settings.js`: connection health/settings and audit export.
+- `api-explorer.js`: live OpenAPI discovery, UI/API correlation, and Swagger link.
 - `main.js`: event binding and startup.
 
 - `$()` / `$$()` select DOM elements; `escapeHtml()` protects rendered text;

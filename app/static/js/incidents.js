@@ -4,30 +4,43 @@ function renderTraceStage(stage, index) {
   const hasDetails = Object.keys(details).length > 0;
   const level = ["failed", "suppressed", "rejected"].includes(stage.status) ? "error" :
     ["pending", "processing", "review"].includes(stage.status) ? "warn" : "info";
+  const searchable = [stage.name, stage.summary, stage.api, ...(stage.data || [])].join(" ").toLowerCase();
   return `
-    <article class="trace-log-row ${escapeHtml(level)}">
-      <div class="trace-log-main">
-        <time>${escapeHtml(formatLogTime(stage.timestamp))}</time>
-        <span class="trace-sequence">${String(index + 1).padStart(2, "0")}</span>
-        <span class="trace-level">${escapeHtml(level.toUpperCase())}</span>
-        <div>
+    <article class="trace-log-row ${escapeHtml(level)}" data-log-level="${escapeHtml(level)}" data-log-search="${escapeHtml(searchable)}">
+      <div class="trace-rail"><span></span><i></i></div>
+      <div class="trace-entry">
+        <div class="trace-entry-head">
+          <div class="trace-entry-identity">
+            <span class="trace-sequence">${String(index + 1).padStart(2, "0")}</span>
+            <time>${escapeHtml(formatLogTime(stage.timestamp))}</time>
+            <span class="trace-level">${escapeHtml(level.toUpperCase())}</span>
+          </div>
+          <span class="pill ${escapeHtml(stage.status)}">${escapeHtml(stage.status)}</span>
+        </div>
+        <div class="trace-entry-message">
           <span class="trace-stage-name">${escapeHtml(stage.name)}</span>
           <span class="trace-message">${escapeHtml(stage.summary)}</span>
         </div>
-        <span class="pill ${escapeHtml(stage.status)}">${escapeHtml(stage.status)}</span>
-      </div>
-      <div class="trace-log-meta">
-        <div>
-          <b>runtime</b>
-          <code>${escapeHtml(stage.api)}</code>
+        <div class="trace-log-meta">
+          <span><b>Source</b><code>${escapeHtml(stage.api)}</code></span>
+          <span><b>Data</b><code>${escapeHtml(stage.data.join(" · "))}</code></span>
         </div>
-        <div>
-          <b>data</b>
-          <code>${escapeHtml(stage.data.join(" · "))}</code>
-        </div>
+        ${hasDetails ? `<details><summary>Inspect structured context</summary>${detailJson("Log context", details)}</details>` : ""}
       </div>
-      ${hasDetails ? `<details><summary>View structured context</summary>${detailJson("Log context", details)}</details>` : ""}
     </article>`;
+}
+
+function filterTraceLogs() {
+  const query = ($("#trace-search")?.value || "").trim().toLowerCase();
+  const level = $("#trace-level-filter")?.value || "all";
+  let visible = 0;
+  $$(".trace-log-row").forEach(row => {
+    const matches = (!query || row.dataset.logSearch.includes(query)) &&
+      (level === "all" || row.dataset.logLevel === level);
+    row.classList.toggle("hidden", !matches);
+    if (matches) visible += 1;
+  });
+  $("#trace-visible-count").textContent = visible;
 }
 
 function formatLogTime(value) {
@@ -58,6 +71,8 @@ async function showEventDetails(item) {
 
   try {
     const trace = await api(`/v1/events/${encodeURIComponent(item.id)}/trace`);
+    const errorCount = trace.stages.filter(stage => ["failed", "suppressed", "rejected"].includes(stage.status)).length;
+    const warningCount = trace.stages.filter(stage => ["pending", "processing", "review"].includes(stage.status)).length;
     $("#details-content").innerHTML = `
       <div class="detail-summary">
         <span class="pill ${escapeHtml(trace.event_status)}">${escapeHtml(trace.event_status)}</span>
@@ -69,16 +84,24 @@ async function showEventDetails(item) {
         <div><dt>Identified by</dt><dd>${escapeHtml(item.source || "Source not provided")}</dd></div>
       </dl>
       <div class="trace-intro">
-        <p class="eyebrow">CORRELATED RUNTIME LOG</p>
-        <h3>Incident processing logs</h3>
-        <p>Chronological entries reconstructed from tenant-scoped API and PostgreSQL records.</p>
+        <div><p class="eyebrow">CORRELATED RUNTIME LOG</p><h3>Incident processing logs</h3><p>Chronological entries reconstructed from tenant-scoped API and PostgreSQL records.</p></div>
+        <div class="trace-stats">
+          <span><b id="trace-visible-count">${trace.stages.length}</b> entries</span>
+          <span class="warn"><b>${warningCount}</b> attention</span>
+          <span class="error"><b>${errorCount}</b> errors</span>
+        </div>
+      </div>
+      <div class="trace-controls">
+        <label class="trace-search"><span>⌕</span><input class="form-control" id="trace-search" type="search" placeholder="Search stage, message, source, or data" aria-label="Search processing logs"></label>
+        <select class="form-select" id="trace-level-filter" aria-label="Filter processing logs by level">
+          <option value="all">All levels</option><option value="info">Info</option><option value="warn">Attention</option><option value="error">Errors</option>
+        </select>
       </div>
       <div class="trace-log">
-        <div class="trace-log-header">
-          <span>Timestamp</span><span>Seq</span><span>Level</span><span>Stage and message</span><span>Status</span>
-        </div>
         ${trace.stages.map(renderTraceStage).join("")}
       </div>`;
+    $("#trace-search").addEventListener("input", filterTraceLogs);
+    $("#trace-level-filter").addEventListener("change", filterTraceLogs);
   } catch (error) {
     $(".trace-loading").textContent = `Unable to load lifecycle trace: ${error.message}`;
   }
@@ -119,10 +142,10 @@ function showSuggestionDetails(item) {
 function navigate(view) {
   $$(".view").forEach(item => item.classList.toggle("active", item.id === view));
   $$(".nav-item").forEach(item => item.classList.toggle("active", item.dataset.view === view));
-  $("#page-title").textContent = titles[view];
   window.location.hash = view;
   if (view === "suggestions") loadSuggestions();
   if (view === "audit") loadAudit();
+  if (view === "api-explorer") loadApis();
   if (view === "dashboard") loadOverview();
   window.scrollTo({top: 0, behavior: "smooth"});
 }

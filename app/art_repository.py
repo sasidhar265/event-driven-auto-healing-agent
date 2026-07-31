@@ -1,5 +1,7 @@
 """Database operations shared by the ART lifecycle API routes."""
 
+from __future__ import annotations
+
 import uuid
 from datetime import UTC, datetime
 from typing import Any, TypeVar
@@ -12,12 +14,17 @@ from sqlalchemy.inspection import inspect
 from sqlalchemy.orm import DeclarativeBase
 
 from app.art_models import (
+    AgentDecisionJournal,
     AgentRun,
     AgentRunStep,
+    ArtEventInbox,
+    ArtEventOutbox,
     ExecutionIntent,
     ExecutionResultRef,
     FailureEvent,
     ImpactAssessment,
+    ImpactDependency,
+    OutcomeFeedback,
     SelfHealProposal,
     TestSelectionDecision,
 )
@@ -41,6 +48,22 @@ GOVERNED_RESOURCES = {ExecutionIntent, SelfHealProposal}
 GOVERNED_STATES = {"APPROVED", "EXECUTED"}
 STATUS_FIELDS = ("status", "processing_status", "publish_status", "applied_status")
 TIMESTAMP_FIELDS = ("created_at", "received_at", "requested_at")
+
+# Public ART resources intentionally collect the supporting tables that belong
+# to the same correlation. This keeps the external API aligned with
+# ART_Feedback.docx without flattening the maintainable database model.
+RELATED_MODELS = {
+    FailureEvent: (ArtEventInbox, ArtEventOutbox),
+    AgentRun: (AgentRunStep, AgentDecisionJournal),
+    ImpactAssessment: (ImpactDependency,),
+    ExecutionIntent: (
+        TestSelectionDecision,
+        ExecutionResultRef,
+        SelfHealProposal,
+        OutcomeFeedback,
+        ArtEventOutbox,
+    ),
+}
 
 
 class ArtRepository:
@@ -97,6 +120,52 @@ class ArtRepository:
         timestamp = self._timestamp_column(model)
         records = (await self.session.scalars(query.order_by(timestamp.desc()).limit(limit))).all()
         return [self._as_response(record) for record in records]
+
+    async def list_public_resource(
+        self,
+        model: type[ArtModel],
+        *,
+        correlation_id: uuid.UUID | None,
+        environment: str | None,
+        limit: int,
+    ) -> list[ArtResourceResponse]:
+        """List a requirement-facing resource with its correlated table data.
+
+        The four public APIs represent lifecycle aggregates. Supporting tables
+        remain independently persisted, but callers receive them under
+        ``data.related`` instead of needing several follow-up API requests.
+        """
+        responses = await self.list(
+            model,
+            correlation_id=correlation_id,
+            environment=environment,
+            limit=limit,
+        )
+        if not responses:
+            return responses
+
+        correlation_ids = {item.correlation_id for item in responses}
+        related_by_correlation: dict[uuid.UUID, dict[str, list[dict[str, Any]]]] = {
+            item.correlation_id: {} for item in responses
+        }
+        for related_model in RELATED_MODELS.get(model, ()):
+            query = select(related_model).where(
+                related_model.tenant_id == self.principal.tenant_id,
+                related_model.correlation_id.in_(correlation_ids),
+            )
+            if environment is not None:
+                query = query.where(related_model.environment == environment)
+            records = (await self.session.scalars(query)).all()
+            table_name = related_model.__tablename__
+            for record in records:
+                resource = self._as_response(record)
+                related_by_correlation[record.correlation_id].setdefault(table_name, []).append(
+                    resource.model_dump()
+                )
+
+        for response in responses:
+            response.data["related"] = related_by_correlation[response.correlation_id]
+        return responses
 
     async def get(
         self,
