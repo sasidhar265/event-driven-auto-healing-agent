@@ -23,6 +23,7 @@ operations_router = APIRouter(prefix="/v1")
 integration_router = APIRouter(prefix="/v1")
 internal_router = APIRouter(prefix="/v1/internal", tags=["Internal services"])
 router = operations_router
+api_settings = get_settings()
 
 
 @operations_router.post("/events", response_model=EventRead, status_code=status.HTTP_202_ACCEPTED)
@@ -192,7 +193,12 @@ async def get_event_trace(
             "timestamp": (
                 primary_suggestion.created_at if primary_suggestion else event.processed_at
             ),
-            "summary": "Below 0.60 is suppressed, 0.60–0.79 requires review, and 0.80+ is ready.",
+            "summary": (
+                f"Below {api_settings.confidence_review_threshold:.2f} is suppressed, "
+                f"{api_settings.confidence_review_threshold:.2f} up to "
+                f"{api_settings.confidence_delivery_threshold:.2f} requires review, "
+                f"and {api_settings.confidence_delivery_threshold:.2f}+ is ready."
+            ),
             "api": "ART confidence evaluator",
             "data": ["suggestions.confidence", "suggestions.status"],
             "details": {
@@ -232,7 +238,11 @@ async def get_event_trace(
 
 @operations_router.get("/events", response_model=list[EventRead])
 async def list_events(
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(
+        api_settings.api_event_limit,
+        ge=1,
+        le=api_settings.api_max_limit,
+    ),
     auth: Principal = Depends(principal),
     session: AsyncSession = Depends(get_session),
 ):
@@ -261,7 +271,10 @@ async def overview(
             Event.payload["environment"].astext == environment
         )
     recent_events = (
-        await session.scalars(recent_query.order_by(Event.created_at.desc()).limit(50))
+        await session.scalars(
+            recent_query.order_by(Event.created_at.desc())
+            .limit(api_settings.api_recent_event_limit)
+        )
     ).all()
     suggestion_query = (
         select(
@@ -361,7 +374,11 @@ async def list_suggestions(event_id: uuid.UUID | None = None, auth: Principal = 
     query = select(Suggestion).where(Suggestion.tenant_id == auth.tenant_id).order_by(Suggestion.created_at.desc())
     if event_id:
         query = query.where(Suggestion.event_id == event_id)
-    return list((await session.scalars(query.limit(100))).all())
+    return list(
+        (
+            await session.scalars(query.limit(api_settings.api_suggestion_limit))
+        ).all()
+    )
 
 
 @operations_router.post("/suggestions/{suggestion_id}/decision", response_model=SuggestionRead)
@@ -404,7 +421,8 @@ async def list_references(
     if active_only:
         query = query.where(RemediationReference.active.is_(True))
     rows = (await session.scalars(
-        query.order_by(RemediationReference.created_at.desc()).limit(200)
+        query.order_by(RemediationReference.created_at.desc())
+        .limit(api_settings.api_delivery_limit)
     )).all()
     return [
         {
@@ -437,7 +455,7 @@ async def list_policies(
 ):
     rows = (await session.scalars(
         select(Policy).where(Policy.tenant_id == auth.tenant_id)
-        .order_by(Policy.created_at.desc()).limit(100)
+        .order_by(Policy.created_at.desc()).limit(api_settings.api_admin_limit)
     )).all()
     return [
         {
@@ -465,7 +483,8 @@ async def list_knowledge(
 ):
     rows = (await session.scalars(
         select(KnowledgeItem).where(KnowledgeItem.tenant_id == auth.tenant_id)
-        .order_by(KnowledgeItem.created_at.desc()).limit(100)
+        .order_by(KnowledgeItem.created_at.desc())
+        .limit(api_settings.api_admin_limit)
     )).all()
     return [
         {
@@ -511,7 +530,12 @@ async def list_deliveries(suggestion_id: uuid.UUID | None = None, auth: Principa
     query = select(WebhookDelivery).where(WebhookDelivery.tenant_id == auth.tenant_id)
     if suggestion_id:
         query = query.where(WebhookDelivery.suggestion_id == suggestion_id)
-    rows = (await session.scalars(query.order_by(WebhookDelivery.created_at.desc()).limit(200))).all()
+    rows = (
+        await session.scalars(
+            query.order_by(WebhookDelivery.created_at.desc())
+            .limit(api_settings.api_delivery_limit)
+        )
+    ).all()
     return [{"id": row.id, "subscription_id": row.subscription_id, "suggestion_id": row.suggestion_id,
              "status": row.status, "attempts": row.attempts, "response_status": row.response_status,
              "last_error": row.last_error, "next_attempt_at": row.next_attempt_at,
@@ -534,7 +558,11 @@ async def retry_delivery(delivery_id: uuid.UUID, auth: Principal = Depends(princ
 
 @operations_router.get("/audit")
 async def audit(
-    limit: int = Query(100, ge=1, le=500),
+    limit: int = Query(
+        api_settings.api_default_limit,
+        ge=1,
+        le=api_settings.api_max_limit,
+    ),
     environment: str | None = Query(default=None, pattern="^(dev|test|preprod|prod)$"),
     from_time: datetime | None = None,
     to_time: datetime | None = None,

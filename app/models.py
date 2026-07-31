@@ -7,6 +7,8 @@ from sqlalchemy import DateTime, Enum, Float, ForeignKey, Index, Integer, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+from app.runtime_config import get_runtime_rules
+
 
 class Base(DeclarativeBase):
     pass
@@ -129,7 +131,10 @@ class WebhookSubscription(Base):
     tenant_id: Mapped[str] = mapped_column(String(100), index=True)
     name: Mapped[str] = mapped_column(String(150))
     callback_url: Mapped[str] = mapped_column(String(2000))
-    event_types: Mapped[list[str]] = mapped_column(JSONB, default=lambda: ["suggestion.ready"])
+    event_types: Mapped[list[str]] = mapped_column(
+        JSONB,
+        default=lambda: [get_runtime_rules().delivery.cloud_event_type],
+    )
     secret: Mapped[str | None] = mapped_column(String(500))
     active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

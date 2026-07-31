@@ -9,13 +9,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.models import AuditLog, Suggestion, WebhookDelivery, WebhookSubscription
+from app.runtime_config import get_runtime_rules
 
 
 def cloud_event(suggestion: Suggestion) -> dict:
+    delivery = get_runtime_rules().delivery
     return {
         "specversion": "1.0", "id": str(suggestion.id),
-        "source": "/auto-healing-agent-runtime",
-        "type": "suggestion.ready", "subject": str(suggestion.event_id),
+        "source": delivery.cloud_event_source,
+        "type": delivery.cloud_event_type, "subject": str(suggestion.event_id),
         "time": suggestion.created_at.isoformat(), "datacontenttype": "application/json",
         "tenantid": suggestion.tenant_id,
         "data": {
@@ -28,7 +30,9 @@ def cloud_event(suggestion: Suggestion) -> dict:
     }
 
 
-async def deliver_due(session: AsyncSession, limit: int = 20) -> int:
+async def deliver_due(session: AsyncSession, limit: int | None = None) -> int:
+    delivery_config = get_runtime_rules().delivery
+    limit = limit or delivery_config.webhook_batch_size
     now = datetime.now(UTC)
     deliveries = (await session.scalars(
         select(WebhookDelivery).where(
@@ -52,7 +56,8 @@ async def deliver_due(session: AsyncSession, limit: int = 20) -> int:
             async with httpx.AsyncClient(timeout=settings.webhook_timeout_seconds) as client:
                 response = await client.post(subscription.callback_url, content=body, headers={
                     "Content-Type": "application/cloudevents+json",
-                    "Ce-Specversion": "1.0", "Ce-Type": "suggestion.ready",
+                    "Ce-Specversion": "1.0",
+                    "Ce-Type": delivery_config.cloud_event_type,
                     "Ce-Id": str(suggestion.id), "X-ART-Signature-256": f"sha256={signature}",
                     "X-ART-Delivery": str(delivery.id),
                 })
@@ -63,15 +68,24 @@ async def deliver_due(session: AsyncSession, limit: int = 20) -> int:
             delivery.last_error = None
             action = "webhook.delivered"
         except Exception as exc:
-            delivery.last_error = str(exc)[:2000]
+            delivery.last_error = str(exc)[
+                :delivery_config.error_message_max_length
+            ]
             if delivery.attempts >= settings.webhook_max_attempts:
                 delivery.status = "dead_letter"
             else:
                 delivery.status = "retry"
-                delivery.next_attempt_at = now + timedelta(seconds=min(2 ** delivery.attempts, 3600))
+                delivery.next_attempt_at = now + timedelta(
+                    seconds=min(
+                        delivery_config.retry_base_seconds ** delivery.attempts,
+                        delivery_config.retry_max_seconds,
+                    )
+                )
             action = f"webhook.{delivery.status}"
         session.add(AuditLog(
-            tenant_id=delivery.tenant_id, actor="webhook-dispatcher", action=action,
+            tenant_id=delivery.tenant_id,
+            actor=delivery_config.dispatcher_actor,
+            action=action,
             resource_type="webhook_delivery", resource_id=str(delivery.id),
             details={"attempt": delivery.attempts, "response_status": delivery.response_status,
                      "suggestion_id": str(delivery.suggestion_id)},

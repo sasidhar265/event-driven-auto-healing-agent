@@ -40,13 +40,15 @@ from app.art_schemas import (
     SelfHealProposalCreate,
     TestSelectionCreate,
 )
+from app.config import get_settings
 from app.db import get_session
 from app.security import Principal, principal
 
 router = APIRouter(prefix="/v1/art", tags=["ART lifecycle"])
+api_settings = get_settings()
 AuthenticatedUser = Annotated[Principal, Depends(principal)]
 DatabaseSession = Annotated[AsyncSession, Depends(get_session)]
-PageLimit = Annotated[int, Query(ge=1, le=500)]
+PageLimit = Annotated[int, Query(ge=1, le=api_settings.api_max_limit)]
 
 
 def repository(session: AsyncSession, auth: Principal) -> ArtRepository:
@@ -70,7 +72,7 @@ async def list_failure_events(
     session: DatabaseSession,
     correlation_id: uuid.UUID | None = None,
     environment: str | None = None,
-    limit: PageLimit = 100,
+    limit: PageLimit = api_settings.api_default_limit,
 ):
     return await repository(session, auth).list(
         FailureEvent,
@@ -95,7 +97,7 @@ async def list_agent_runs(
     session: DatabaseSession,
     correlation_id: uuid.UUID | None = None,
     environment: str | None = None,
-    limit: PageLimit = 100,
+    limit: PageLimit = api_settings.api_default_limit,
 ):
     return await repository(session, auth).list(
         AgentRun,
@@ -130,7 +132,7 @@ async def list_agent_run_steps(
     session: DatabaseSession,
     correlation_id: uuid.UUID | None = None,
     environment: str | None = None,
-    limit: PageLimit = 100,
+    limit: PageLimit = api_settings.api_default_limit,
 ):
     return await repository(session, auth).list(
         AgentRunStep,
@@ -155,7 +157,7 @@ async def list_decision_journals(
     session: DatabaseSession,
     correlation_id: uuid.UUID | None = None,
     environment: str | None = None,
-    limit: PageLimit = 100,
+    limit: PageLimit = api_settings.api_default_limit,
 ):
     return await repository(session, auth).list(
         AgentDecisionJournal,
@@ -180,7 +182,7 @@ async def list_impact_assessments(
     session: DatabaseSession,
     correlation_id: uuid.UUID | None = None,
     environment: str | None = None,
-    limit: PageLimit = 100,
+    limit: PageLimit = api_settings.api_default_limit,
 ):
     return await repository(session, auth).list(
         ImpactAssessment,
@@ -205,7 +207,7 @@ async def list_impact_dependencies(
     session: DatabaseSession,
     correlation_id: uuid.UUID | None = None,
     environment: str | None = None,
-    limit: PageLimit = 100,
+    limit: PageLimit = api_settings.api_default_limit,
 ):
     return await repository(session, auth).list(
         ImpactDependency,
@@ -230,7 +232,7 @@ async def list_test_selections(
     session: DatabaseSession,
     correlation_id: uuid.UUID | None = None,
     environment: str | None = None,
-    limit: PageLimit = 100,
+    limit: PageLimit = api_settings.api_default_limit,
 ):
     return await repository(session, auth).list(
         TestSelectionDecision,
@@ -255,7 +257,7 @@ async def list_execution_intents(
     session: DatabaseSession,
     correlation_id: uuid.UUID | None = None,
     environment: str | None = None,
-    limit: PageLimit = 100,
+    limit: PageLimit = api_settings.api_default_limit,
 ):
     return await repository(session, auth).list(
         ExecutionIntent,
@@ -290,7 +292,7 @@ async def list_execution_results(
     session: DatabaseSession,
     correlation_id: uuid.UUID | None = None,
     environment: str | None = None,
-    limit: PageLimit = 100,
+    limit: PageLimit = api_settings.api_default_limit,
 ):
     return await repository(session, auth).list(
         ExecutionResultRef,
@@ -315,7 +317,7 @@ async def list_self_heal_proposals(
     session: DatabaseSession,
     correlation_id: uuid.UUID | None = None,
     environment: str | None = None,
-    limit: PageLimit = 100,
+    limit: PageLimit = api_settings.api_default_limit,
 ):
     return await repository(session, auth).list(
         SelfHealProposal,
@@ -350,7 +352,7 @@ async def list_outcome_feedback(
     session: DatabaseSession,
     correlation_id: uuid.UUID | None = None,
     environment: str | None = None,
-    limit: PageLimit = 100,
+    limit: PageLimit = api_settings.api_default_limit,
 ):
     return await repository(session, auth).list(
         OutcomeFeedback,
@@ -375,7 +377,7 @@ async def list_event_inbox(
     session: DatabaseSession,
     correlation_id: uuid.UUID | None = None,
     environment: str | None = None,
-    limit: PageLimit = 100,
+    limit: PageLimit = api_settings.api_default_limit,
 ):
     return await repository(session, auth).list(
         ArtEventInbox,
@@ -400,7 +402,7 @@ async def list_event_outbox(
     session: DatabaseSession,
     correlation_id: uuid.UUID | None = None,
     environment: str | None = None,
-    limit: PageLimit = 100,
+    limit: PageLimit = api_settings.api_default_limit,
 ):
     return await repository(session, auth).list(
         ArtEventOutbox,

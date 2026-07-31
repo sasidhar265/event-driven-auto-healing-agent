@@ -15,33 +15,8 @@ from app.art_models import (
     SelfHealProposal,
 )
 from app.models import Event, Suggestion
+from app.runtime_config import get_runtime_rules
 from app.services import Candidate, FailureRoute
-
-ENVIRONMENTS = {"dev", "test", "preprod", "prod"}
-SEVERITY = {
-    "info": "LOW",
-    "warning": "MEDIUM",
-    "error": "HIGH",
-    "critical": "CRITICAL",
-}
-CATEGORY = {
-    "ui": "UI",
-    "api": "API",
-    "logic": "FUNCTIONAL",
-    "functional": "FUNCTIONAL",
-    "test_data": "DATA",
-    "database": "DATA",
-    "infrastructure": "INFRA",
-    "dependency": "INFRA",
-    "security": "SECURITY",
-    "performance": "PERFORMANCE",
-}
-SELF_HEAL_TYPE = {
-    "ui": "LOCATOR",
-    "test_data": "TEST_DATA",
-    "logic": "MINOR_LOGIC",
-    "functional": "ASSERTION",
-}
 
 
 def correlation_uuid(event: Event) -> uuid.UUID:
@@ -57,8 +32,11 @@ def correlation_uuid(event: Event) -> uuid.UUID:
 
 
 def event_environment(event: Event) -> str:
-    value = str(event.payload.get("environment", "dev")).lower()
-    return value if value in ENVIRONMENTS else "dev"
+    config = get_runtime_rules().lifecycle
+    value = str(
+        event.payload.get("environment", config.default_environment)
+    ).lower()
+    return value if value in config.environments else config.default_environment
 
 
 class LifecycleRecorder:
@@ -72,6 +50,7 @@ class LifecycleRecorder:
         self.step_sequence = 0
 
     async def start(self, route: FailureRoute) -> None:
+        config = get_runtime_rules().lifecycle
         payload = self.event.payload
         self.failure = FailureEvent(
             correlation_id=self.correlation_id,
@@ -82,9 +61,13 @@ class LifecycleRecorder:
             test_id=payload.get("test_id") or payload.get("test_name"),
             request_id=payload.get("request_id"),
             source_system=self.event.source,
-            failure_category=CATEGORY.get(route.category, "UNKNOWN"),
+            failure_category=config.category_map.get(
+                route.category, config.default_category
+            ),
             failure_subtype=self.event.event_type,
-            severity=SEVERITY.get(self.event.severity.lower(), "MEDIUM"),
+            severity=config.severity_map.get(
+                self.event.severity.lower(), config.default_severity
+            ),
             api_endpoint=payload.get("endpoint"),
             status_code=payload.get("status_code"),
             error_message=payload.get("error") or payload.get("message"),
@@ -98,13 +81,13 @@ class LifecycleRecorder:
             correlation_id=self.correlation_id,
             tenant_id=self.event.tenant_id,
             environment=self.environment,
-            workflow_type="FAILURE_ANALYSIS",
+            workflow_type=config.workflow_type,
             trigger_event_type=self.event.event_type,
             source_event_id=self.event.id,
             status=ArtStatus.IN_PROGRESS.value,
             started_at=datetime.now(UTC),
             input_context_ref=payload.get("context_ref"),
-            created_by="event-runtime",
+            created_by=config.runtime_actor,
         )
         self.session.add_all([self.failure, self.run])
         await self.session.flush()
@@ -121,6 +104,7 @@ class LifecycleRecorder:
         candidate: Candidate,
         suggestion: Suggestion,
     ) -> None:
+        config = get_runtime_rules().lifecycle
         if self.run is None:
             return
         step = await self.record_step(
@@ -146,10 +130,10 @@ class LifecycleRecorder:
                 confidence_reason=candidate.rationale,
                 evidence_refs=suggestion.evidence,
                 policy_version=str(suggestion.policy_result.get("policies", "")),
-                model_version="deterministic-or-enterprise-gateway",
+                model_version=config.model_version,
             )
         )
-        proposal_type = SELF_HEAL_TYPE.get(candidate.agent_type)
+        proposal_type = config.self_heal_type_map.get(candidate.agent_type)
         if proposal_type:
             self.session.add(
                 SelfHealProposal(

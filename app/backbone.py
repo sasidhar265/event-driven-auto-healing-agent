@@ -9,6 +9,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from app.config import get_settings
+from app.runtime_config import get_runtime_rules
 from app.security import Principal
 
 
@@ -36,6 +37,7 @@ def decode_backbone_event(
     `ce_tenantid` Kafka header.
     """
 
+    settings = get_settings()
     kafka_headers = _headers(headers)
     try:
         body = json.loads(value)
@@ -54,7 +56,9 @@ def decode_backbone_event(
             "type": kafka_headers.get("ce_type"),
             "subject": kafka_headers.get("ce_subject"),
             "correlationid": kafka_headers.get("ce_correlationid"),
-            "severity": kafka_headers.get("ce_severity", "error"),
+            "severity": kafka_headers.get(
+                "ce_severity", settings.backbone_default_severity
+            ),
             "datacontenttype": kafka_headers.get("content-type", "application/json"),
             "data": body,
         }
@@ -64,7 +68,11 @@ def decode_backbone_event(
     tenant_id = str(cloud_event.get("tenantid") or kafka_headers.get("ce_tenantid") or "").strip()
     if not tenant_id:
         raise ValueError("CloudEvent tenantid extension is required")
-    actor = str(cloud_event.get("actor") or kafka_headers.get("ce_actor") or "event-backbone")
+    actor = str(
+        cloud_event.get("actor")
+        or kafka_headers.get("ce_actor")
+        or settings.backbone_default_actor
+    )
     return BackboneEnvelope(cloud_event=cloud_event, principal=Principal(tenant_id, actor))
 
 
@@ -76,7 +84,12 @@ def dead_letter_record(
 
     record = {
         "source": {"topic": topic, "partition": partition, "offset": offset},
-        "error": {"type": type(error).__name__, "message": str(error)[:2000]},
+        "error": {
+            "type": type(error).__name__,
+            "message": str(error)[
+                :get_runtime_rules().delivery.error_message_max_length
+            ],
+        },
         "original": {
             "value_base64": base64.b64encode(value).decode("ascii"),
             "headers": _headers(headers),

@@ -5,6 +5,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models import EventStatus, SuggestionStatus
+from app.runtime_config import get_runtime_rules
 
 
 class EventCreate(BaseModel):
@@ -75,7 +76,9 @@ class CloudEventCreate(BaseModel):
 class SubscriptionCreate(BaseModel):
     name: str = Field(min_length=1, max_length=150)
     callback_url: str = Field(pattern=r"^https?://", max_length=2000)
-    event_types: list[str] = Field(default_factory=lambda: ["suggestion.ready"])
+    event_types: list[str] = Field(
+        default_factory=lambda: [get_runtime_rules().delivery.cloud_event_type]
+    )
     secret: str | None = Field(default=None, min_length=16, max_length=500)
 
 

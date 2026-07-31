@@ -543,6 +543,11 @@ The portability guide explains how to switch environments or map other
 PostgreSQL tables without rewriting the core:
 [PORTABILITY.md](PORTABILITY.md).
 
+Routing keywords, weights, confidence bonuses, specialist instructions,
+lifecycle mappings, batch sizes, and retry timing are maintained separately in
+`app/resources/runtime_rules.json`. See the
+[runtime configuration guide](CONFIGURATION.md).
+
 ## 14. Testing and verification
 
 Run the complete suite:
@@ -672,6 +677,7 @@ Before treating this reference runtime as production-ready:
 ## 18. Related documents
 
 - [ART visual guide](VISUAL_GUIDE.md)
+- [Runtime configuration maintenance](CONFIGURATION.md)
 - [Technical reference](README.md)
 - [Portability and external-table integration](PORTABILITY.md)
 - [pgAdmin 4 setup and reporting](PGADMIN.md)

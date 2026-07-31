@@ -41,6 +41,7 @@ Choose the documentation path that matches what you need:
 | API or integration developer | [API guide](documentation/PROJECT_WALKTHROUGH.md#11-api-guide) |
 | Database administrator | [pgAdmin 4 guide](documentation/PGADMIN.md) |
 | Moving to another machine/environment | [Portability guide](documentation/PORTABILITY.md) |
+| Maintaining routing and runtime configuration | [Configuration guide](documentation/CONFIGURATION.md) |
 | Requirement traceability | [ART feedback implementation map](documentation/ART_FEEDBACK_IMPLEMENTATION.md) |
 | Deep implementation reference | [Technical reference](documentation/README.md) |
 

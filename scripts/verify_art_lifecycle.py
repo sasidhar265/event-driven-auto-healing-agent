@@ -1,15 +1,16 @@
 """Exercise every ART lifecycle API against a running local server."""
 
+import os
 import sys
 import uuid
 
 import httpx
 
-BASE_URL = "http://127.0.0.1:8000"
+BASE_URL = os.getenv("ART_VERIFY_BASE_URL", "http://127.0.0.1:8000")
 HEADERS = {
-    "X-API-Key": "change-me",
-    "X-Tenant-Id": "art-verification",
-    "X-Actor": "lifecycle-verifier",
+    "X-API-Key": os.getenv("ART_VERIFY_API_KEY", "change-me"),
+    "X-Tenant-Id": os.getenv("ART_VERIFY_TENANT", "art-verification"),
+    "X-Actor": os.getenv("ART_VERIFY_ACTOR", "lifecycle-verifier"),
 }
 
 
@@ -25,7 +26,8 @@ def main() -> int:
     correlation_id = str(uuid.uuid4())
     common = {"correlation_id": correlation_id, "environment": "test"}
 
-    with httpx.Client(base_url=BASE_URL, headers=HEADERS, timeout=15) as client:
+    timeout = float(os.getenv("ART_VERIFY_TIMEOUT_SECONDS", "15"))
+    with httpx.Client(base_url=BASE_URL, headers=HEADERS, timeout=timeout) as client:
         failure = create(
             client,
             "failure-events",

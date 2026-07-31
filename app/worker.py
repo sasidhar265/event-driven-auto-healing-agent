@@ -7,11 +7,13 @@ from app.config import get_settings
 from app.db import SessionLocal, engine
 from app.models import Outbox
 from app.processor import process_event
+from app.runtime_config import get_runtime_rules
 from app.webhooks import deliver_due
 
 
 async def run() -> None:
     settings = get_settings()
+    rules = get_runtime_rules()
     bridge = None
     if settings.external_postgres_enabled:
         from app.integrations.postgres_bridge import ExternalPostgresBridge
@@ -26,7 +28,9 @@ async def run() -> None:
             async with SessionLocal() as session:
                 items = (await session.scalars(
                     select(Outbox).where(Outbox.published_at.is_(None))
-                    .order_by(Outbox.available_at).limit(20).with_for_update(skip_locked=True)
+                    .order_by(Outbox.available_at)
+                    .limit(rules.delivery.worker_batch_size)
+                    .with_for_update(skip_locked=True)
                 )).all()
                 for item in items:
                     if item.topic == "event.received":

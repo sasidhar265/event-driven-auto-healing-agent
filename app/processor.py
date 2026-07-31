@@ -11,6 +11,7 @@ from app.models import (
     AuditLog, Event, EventStatus, Suggestion, SuggestionStatus,
     WebhookDelivery, WebhookSubscription,
 )
+from app.runtime_config import get_runtime_rules
 from app.services import (
     AIService,
     Candidate,
@@ -22,6 +23,7 @@ from app.services import (
 
 
 async def process_event(session: AsyncSession, event_id: uuid.UUID) -> None:
+    rules = get_runtime_rules()
     event = await session.scalar(
         select(Event).where(Event.id == event_id).with_for_update()
     )
@@ -77,13 +79,15 @@ async def process_event(session: AsyncSession, event_id: uuid.UUID) -> None:
         _add_audit_log(
             session,
             event,
-            actor="event-runtime",
+            actor=rules.lifecycle.runtime_actor,
             action="event.processed",
             details={"suggestion_count": suggestion_count},
         )
     except Exception as exc:
         event.status = EventStatus.FAILED
-        event.error = str(exc)[:2000]
+        event.error = str(exc)[
+            :get_runtime_rules().delivery.error_message_max_length
+        ]
         await lifecycle.complete(failed=True, reason=event.error)
         raise
 
@@ -136,6 +140,7 @@ async def _queue_ready_webhooks(
     event: Event,
     suggestion: Suggestion,
 ) -> None:
+    ready_event_type = get_runtime_rules().delivery.cloud_event_type
     if suggestion.status != SuggestionStatus.READY:
         return
 
@@ -150,7 +155,7 @@ async def _queue_ready_webhooks(
 
     for subscription in subscriptions:
         accepts_ready_events = (
-            "suggestion.ready" in subscription.event_types
+            ready_event_type in subscription.event_types
             or "*" in subscription.event_types
         )
         if accepts_ready_events:

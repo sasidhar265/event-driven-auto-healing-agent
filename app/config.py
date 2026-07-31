@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     service_name: str = "auto-healing-agent-runtime"
+    app_version: str = "0.1.0"
+    runtime_rules_path: str = "app/resources/runtime_rules.json"
     api_profile: Literal["operations", "integration", "admin", "full"] = "operations"
     database_url: str = "postgresql+asyncpg://healing:healing@localhost:5432/healing"
     api_key: str = "change-me"
@@ -18,6 +20,8 @@ class Settings(BaseSettings):
     ai_provider: str = "deterministic"
     ai_endpoint: str | None = None
     ai_api_key: str | None = None
+    ai_timeout_seconds: float = Field(15, gt=0, le=300)
+    ai_rationale_max_length: int = Field(5000, ge=100, le=50000)
     webhook_signing_secret: str = "change-webhook-secret"
     webhook_max_attempts: int = Field(8, ge=1, le=50)
     webhook_timeout_seconds: float = Field(10, gt=0, le=60)
@@ -27,6 +31,8 @@ class Settings(BaseSettings):
     kafka_consumer_group: str = "auto-healing-agent-runtime"
     kafka_auto_offset_reset: str = Field("earliest", pattern="^(earliest|latest)$")
     kafka_security_protocol: str = "PLAINTEXT"
+    backbone_default_actor: str = "event-backbone"
+    backbone_default_severity: str = "error"
     kafka_sasl_mechanism: str | None = None
     kafka_sasl_username: str | None = None
     kafka_sasl_password: str | None = None
@@ -56,6 +62,13 @@ class Settings(BaseSettings):
     external_result_created_column: str = "created_at"
     external_event_result_column: str = "art_suggestion"
     external_event_result_status_column: str = "art_status"
+    api_default_limit: int = Field(100, ge=1, le=500)
+    api_max_limit: int = Field(500, ge=1, le=5000)
+    api_event_limit: int = Field(50, ge=1, le=500)
+    api_recent_event_limit: int = Field(50, ge=1, le=500)
+    api_suggestion_limit: int = Field(100, ge=1, le=1000)
+    api_admin_limit: int = Field(100, ge=1, le=1000)
+    api_delivery_limit: int = Field(200, ge=1, le=1000)
 
 
 @lru_cache

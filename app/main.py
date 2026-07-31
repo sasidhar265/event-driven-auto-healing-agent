@@ -12,6 +12,7 @@ from app.api import integration_router, internal_router, operations_router
 from app.art_api import router as art_router
 from app.config import get_settings
 from app.db import engine
+from app.runtime_config import get_runtime_rules
 
 
 @asynccontextmanager
@@ -23,10 +24,11 @@ async def lifespan(_: FastAPI):
 def create_application(api_profile: str | None = None) -> FastAPI:
     """Build an application exposing only the routes needed by its deployment."""
 
+    get_runtime_rules()
     profile = api_profile or get_settings().api_profile
     application = FastAPI(
         title="Auto-Healing Suggestion Agent Runtime",
-        version="0.1.0",
+        version=get_settings().app_version,
         lifespan=lifespan,
     )
     application.include_router(operations_router)
