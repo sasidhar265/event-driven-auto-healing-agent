@@ -1,10 +1,99 @@
 /* Incident trace, navigation, scenario selection, and event submission. */
+function compactLogValue(value) {
+  const serialized = typeof value === "string" ? value : JSON.stringify(value);
+  return serialized.length > 120 ? `${serialized.slice(0, 117)}…` : serialized;
+}
+
+function renderClassificationDecision(details) {
+  const input = details.input_event || {};
+  const evidence = Object.entries(details.payload_evidence || {});
+  const scores = details.category_scores || [
+    {category: details.category, score: details.confidence || 0},
+    ...(details.alternatives || [])
+  ];
+  const maximum = Math.max(...scores.map(item => Number(item.score) || 0), 1);
+  const calculation = details.confidence_calculation || {};
+  const percent = value => `${(Number(value || 0) * 100).toFixed(1)}%`;
+  return `
+    <section class="classification-decision" aria-label="Classification decision explanation">
+      <div class="classification-input">
+        <p class="classification-label">1 · Incoming event</p>
+        <strong>${escapeHtml(input.event_type || "Unknown event type")}</strong>
+        <div class="classification-input-meta">
+          <span>Source <b>${escapeHtml(input.source || "unknown")}</b></span>
+          <span>Severity <b>${escapeHtml(input.severity || "unknown")}</b></span>
+        </div>
+        <details><summary>View incoming payload evidence (${evidence.length} fields)</summary>
+          <div class="classification-evidence">${evidence.map(([key, value]) => `
+            <div><code>${escapeHtml(key)}</code><span>${escapeHtml(compactLogValue(value))}</span></div>`).join("")}</div>
+        </details>
+      </div>
+      <div class="classification-signal-flow" aria-hidden="true"><span>→</span></div>
+      <div class="classification-analysis">
+        <p class="classification-label">2 · Weighted evidence</p>
+        <div class="classification-signals">${(details.matched_signals || []).map(signal => {
+          const kind = signal.startsWith("explicit:") ? "explicit" : signal.startsWith("field:") ? "field" : "text";
+          return `<span class="${kind}">${escapeHtml(signal)}</span>`;
+        }).join("") || "<span>No matching signals</span>"}</div>
+        <div class="classification-scores">${scores.map(item => `
+          <div><span>${escapeHtml(item.category)}</span><i><b style="width:${Math.max(2, (Number(item.score) || 0) / maximum * 100)}%"></b></i><strong>${Number(item.score || 0).toFixed(1)}</strong></div>`).join("")}</div>
+        ${calculation.formula ? `<div class="confidence-calculation">
+          <p>Confidence calculation</p>
+          <div class="confidence-equation">
+            <span><b>${percent(calculation.base)}</b><small>Base</small></span><i>+</i>
+            <span><b>${percent(calculation.score_contribution)}</b><small>Winning score</small></span><i>+</i>
+            <span><b>${percent(calculation.separation_contribution)}</b><small>Category separation</small></span><i>=</i>
+            <span class="total"><b>${percent(calculation.final_confidence)}</b><small>Final</small></span>
+          </div>
+          <details><summary>Show formula inputs and caps</summary>
+            <code>min(${percent(calculation.maximum)}, ${percent(calculation.base)} + min(${Number(calculation.winning_score).toFixed(1)}, ${Number(calculation.winning_score_cap).toFixed(1)}) × ${Number(calculation.score_multiplier).toFixed(2)} + min(${Number(calculation.separation).toFixed(1)}, ${Number(calculation.separation_cap).toFixed(1)}) × ${Number(calculation.separation_multiplier).toFixed(2)})</code>
+            <small>Winner ${Number(calculation.winning_score).toFixed(1)} vs runner-up ${Number(calculation.runner_up_score).toFixed(1)}. ${calculation.ambiguity_cap_applied ? `The ${percent(calculation.ambiguity_cap)} ambiguity cap was applied.` : `Separation meets the ${Number(calculation.ambiguity_margin).toFixed(2)} ambiguity rule.`}</small>
+          </details>
+        </div>` : ""}
+      </div>
+      <div class="classification-signal-flow" aria-hidden="true"><span>→</span></div>
+      <div class="classification-result">
+        <p class="classification-label">3 · Routing decision</p>
+        <span class="classification-category">${escapeHtml(details.category || "pending")}</span>
+        <strong>${Math.round(Number(details.confidence || 0) * 100)}% confidence</strong>
+        <small>${details.ambiguous ? "Ambiguous evidence—request more context" : `Route to the ${escapeHtml(details.category || "selected")} specialist`}</small>
+      </div>
+    </section>`;
+}
+
+function renderSuggestionConfidenceCalculation(details) {
+  const calculation = details.calculation || {};
+  if (!calculation.formula) return "";
+  const percent = value => `${(Number(value || 0) * 100).toFixed(1)}%`;
+  const adjustments = calculation.policy_adjustments || [];
+  return `
+    <section class="suggestion-confidence-calculation">
+      <p class="classification-label">Suggestion confidence calculation</p>
+      <div class="confidence-equation suggestion-equation">
+        <span><b>${percent(calculation.specialist_base)}</b><small>Specialist evidence score</small></span><i>+</i>
+        <span><b>${percent(calculation.adjustment_total)}</b><small>Policy adjustments</small></span><i>=</i>
+        <span class="total"><b>${percent(calculation.final_confidence)}</b><small>Final confidence</small></span>
+      </div>
+      <p class="confidence-basis">The specialist score comes from matched failure evidence and available repair context. Governance policies can then increase or decrease it before the 0–100% clamp.</p>
+      <div class="confidence-thresholds">
+        <span><b>&lt; ${percent(calculation.review_threshold)}</b> Suppressed</span>
+        <span><b>${percent(calculation.review_threshold)}–${percent(calculation.ready_threshold)}</b> Review</span>
+        <span><b>≥ ${percent(calculation.ready_threshold)}</b> Ready</span>
+      </div>
+      <details><summary>Show policy adjustments and formula</summary>
+        <code>${escapeHtml(calculation.formula)}</code>
+        <small>${adjustments.length ? adjustments.map(item => `${item.policy}: ${percent(item.value)}`).join(" · ") : "No tenant policy changed the specialist score."}</small>
+        <small>Decision: ${escapeHtml(calculation.decision || details.decision || "pending")}</small>
+      </details>
+    </section>`;
+}
+
 function renderTraceStage(stage, index) {
   const details = stage.details || {};
   const hasDetails = Object.keys(details).length > 0;
   const level = ["failed", "suppressed", "rejected"].includes(stage.status) ? "error" :
     ["pending", "processing", "review"].includes(stage.status) ? "warn" : "info";
-  const searchable = [stage.name, stage.summary, stage.api, ...(stage.data || [])].join(" ").toLowerCase();
+  const searchable = [stage.name, stage.summary, stage.api, ...(stage.data || []), JSON.stringify(details)].join(" ").toLowerCase();
   return `
     <article class="trace-log-row ${escapeHtml(level)}" data-log-level="${escapeHtml(level)}" data-log-search="${escapeHtml(searchable)}">
       <div class="trace-rail"><span></span><i></i></div>
@@ -21,6 +110,8 @@ function renderTraceStage(stage, index) {
           <span class="trace-stage-name">${escapeHtml(stage.name)}</span>
           <span class="trace-message">${escapeHtml(stage.summary)}</span>
         </div>
+        ${stage.key === "classification" && details.category ? renderClassificationDecision(details) : ""}
+        ${stage.key === "confidence" ? renderSuggestionConfidenceCalculation(details) : ""}
         <div class="trace-log-meta">
           <span><b>Source</b><code>${escapeHtml(stage.api)}</code></span>
           <span><b>Data</b><code>${escapeHtml(stage.data.join(" · "))}</code></span>

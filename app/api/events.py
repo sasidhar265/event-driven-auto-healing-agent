@@ -12,6 +12,7 @@ from app.models import EventStatus
 from app.repositories.events import queries as event_queries
 from app.schemas import CloudEventCreate, EventCreate, EventRead
 from app.security import Principal, principal
+from app.services.routing import FailureRouter, route_details
 
 @operations_router.post("/events", response_model=EventRead, status_code=status.HTTP_202_ACCEPTED)
 async def ingest_event(body: EventCreate, auth: Principal = Depends(principal), session: AsyncSession = Depends(get_session)):
@@ -56,12 +57,36 @@ async def get_event_trace(
         ),
         None,
     )
-    classification = classification_record.details if classification_record else {}
+    classification = dict(classification_record.details) if classification_record else {}
+    if classification:
+        current_explanation = route_details(FailureRouter().classify(event))
+        classification.setdefault("category_scores", current_explanation["category_scores"])
+        classification.setdefault(
+            "confidence_calculation", current_explanation["confidence_calculation"]
+        )
     primary_suggestion = suggestions[0] if suggestions else None
     confidence = primary_suggestion.confidence if primary_suggestion else None
     suggestion_status = (
         primary_suggestion.status.value if primary_suggestion else "pending"
     )
+    suggestion_confidence_calculation = (
+        primary_suggestion.policy_result.get("confidence_calculation", {})
+        if primary_suggestion else {}
+    )
+    if primary_suggestion and not suggestion_confidence_calculation:
+        suggestion_confidence_calculation = {
+            "specialist_base": confidence,
+            "policy_adjustments": [],
+            "adjustment_total": 0.0,
+            "before_clamp": confidence,
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "final_confidence": confidence,
+            "review_threshold": api_settings.confidence_review_threshold,
+            "ready_threshold": api_settings.confidence_delivery_threshold,
+            "decision": suggestion_status,
+            "formula": "clamp(specialist base + policy adjustments, 0, 1)",
+        }
 
     stages = [
         {
@@ -104,7 +129,15 @@ async def get_event_trace(
             "summary": "Structured evidence and weighted signals select the responsible specialist.",
             "api": "Worker: FailureRouter.classify",
             "data": ["audit_logs", "art.failure_events", "art.agent_run_steps"],
-            "details": classification,
+            "details": {
+                "input_event": {
+                    "event_type": event.event_type,
+                    "source": event.source,
+                    "severity": event.severity,
+                },
+                "payload_evidence": event.payload,
+                **classification,
+            },
         },
         {
             "key": "change_detection",
@@ -166,6 +199,7 @@ async def get_event_trace(
                 "score": confidence,
                 "score_percent": round(confidence * 100, 1) if confidence is not None else None,
                 "decision": suggestion_status,
+                "calculation": suggestion_confidence_calculation,
             },
         },
         {

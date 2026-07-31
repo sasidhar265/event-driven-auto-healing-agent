@@ -22,3 +22,4 @@ class FailureRoute:
     matched_signals: tuple[str, ...]
     alternatives: tuple[tuple[str, float], ...]
     ambiguous: bool = False
+    category_scores: tuple[tuple[str, float], ...] = ()

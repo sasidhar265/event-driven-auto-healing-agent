@@ -159,6 +159,21 @@ def test_detail_actions_use_modal_overlays():
     assert 'id="trace-level-filter"' in javascript
     assert "filterTraceLogs" in javascript
     assert "trace-visible-count" in javascript
+    assert "renderClassificationDecision" in javascript
+    assert "Incoming event" in javascript
+    assert "Weighted evidence" in javascript
+    assert "Routing decision" in javascript
+    assert "payload_evidence" in javascript
+    assert "category_scores" in javascript
+    assert "Confidence calculation" in javascript
+    assert "Winning score" in javascript
+    assert "Category separation" in javascript
+    assert "ambiguity cap" in javascript
+    assert 'data-confidence-id=' in javascript
+    assert "showSuggestionConfidence" in javascript
+    assert "renderSuggestionConfidenceCalculation" in javascript
+    assert "Specialist evidence score" in javascript
+    assert "Policy adjustments" in javascript
     assert "<dt>Identified by</dt>" in javascript
     assert "<dt>Environment</dt>" in javascript
     assert "Identified by ${escapeHtml(item.source" in javascript

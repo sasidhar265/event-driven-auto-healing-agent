@@ -57,7 +57,7 @@ class FailureRouter:
         category, top_score = ranked[0]
         second_score = ranked[1][1]
         if top_score == 0:
-            return FailureRoute("unknown", 0.0, (), tuple(ranked[1:3]), True)
+            return FailureRoute("unknown", 0.0, (), tuple(ranked[1:3]), True, tuple(ranked))
 
         # Signal strength and separation from the next category both matter.
         confidence = min(
@@ -75,17 +75,49 @@ class FailureRouter:
             confidence = min(confidence, scoring.ambiguous_confidence_cap)
         return FailureRoute(
             category, confidence, tuple(dict.fromkeys(matched[category])),
-            tuple(ranked[1:3]), ambiguous,
+            tuple(ranked[1:3]), ambiguous, tuple(ranked),
         )
 
 def route_details(route: FailureRoute) -> dict[str, Any]:
     """Convert a route into JSON-safe details for audit and suggestion output."""
+    scoring = get_runtime_rules().routing.scoring
+    ranked_scores = list(route.category_scores)
+    winning_score = ranked_scores[0][1] if ranked_scores else 0.0
+    runner_up_score = ranked_scores[1][1] if len(ranked_scores) > 1 else 0.0
+    capped_score = min(winning_score, scoring.score_cap)
+    separation = max(0.0, winning_score - runner_up_score)
+    capped_separation = min(separation, scoring.separation_cap)
+    score_contribution = capped_score * scoring.score_multiplier
+    separation_contribution = capped_separation * scoring.separation_multiplier
+    raw_confidence = scoring.confidence_base + score_contribution + separation_contribution
     return {
         "category": route.category,
         "confidence": route.confidence,
         "matched_signals": list(route.matched_signals),
         "alternatives": [{"category": name, "score": score} for name, score in route.alternatives],
+        "category_scores": [
+            {"category": name, "score": score} for name, score in route.category_scores
+        ],
         "ambiguous": route.ambiguous,
+        "confidence_calculation": {
+            "base": scoring.confidence_base,
+            "winning_score": winning_score,
+            "winning_score_cap": scoring.score_cap,
+            "score_multiplier": scoring.score_multiplier,
+            "score_contribution": score_contribution,
+            "runner_up_score": runner_up_score,
+            "separation": separation,
+            "separation_cap": scoring.separation_cap,
+            "separation_multiplier": scoring.separation_multiplier,
+            "separation_contribution": separation_contribution,
+            "raw_confidence": raw_confidence,
+            "maximum": scoring.confidence_cap,
+            "ambiguity_margin": scoring.ambiguity_margin,
+            "ambiguity_cap": scoring.ambiguous_confidence_cap,
+            "ambiguity_cap_applied": route.ambiguous,
+            "final_confidence": route.confidence,
+            "formula": "min(maximum, base + score contribution + separation contribution)",
+        },
     }
 
 

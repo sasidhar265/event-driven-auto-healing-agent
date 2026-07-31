@@ -64,3 +64,9 @@ def test_router_reads_signals_and_weights_from_runtime_configuration(monkeypatch
 
     assert route.category == "api"
     assert "organization_specific_failure_code" in route.matched_signals
+    assert dict(route.category_scores)["api"] >= 10.0
+    calculation = routing.route_details(route)["confidence_calculation"]
+    assert calculation["base"] == rules.routing.scoring.confidence_base
+    assert calculation["final_confidence"] == route.confidence
+    assert calculation["winning_score"] >= calculation["runner_up_score"]
+    assert calculation["formula"].startswith("min(maximum")

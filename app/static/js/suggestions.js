@@ -27,6 +27,14 @@ async function loadSuggestions() {
         if (item) showSuggestionDetails(item);
       });
     });
+    $$("[data-confidence-id]").forEach(button => {
+      button.addEventListener("click", () => {
+        const item = currentSuggestions.find(
+          suggestion => suggestion.id === button.dataset.confidenceId
+        );
+        if (item) showSuggestionConfidence(item);
+      });
+    });
   } catch (error) {
     container.innerHTML = `<div class="panel empty-state">${escapeHtml(error.message)}</div>`;
   }
@@ -43,7 +51,7 @@ function renderSuggestion(item) {
             <div class="suggestion-meta"><span class="category ${escapeHtml(route.category || item.agent_type)}">${escapeHtml(item.agent_type)}</span><span class="pill ${escapeHtml(item.status)}">${escapeHtml(item.status)}</span></div>
             <h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.rationale)}</p>
           </div>
-          <div class="confidence-number">${(item.confidence * 100).toFixed(0)}%<small>CONFIDENCE</small></div>
+          <button class="btn confidence-number confidence-button" data-confidence-id="${item.id}" type="button" title="View confidence calculation">${(item.confidence * 100).toFixed(0)}%<small>VIEW CALCULATION</small></button>
         </div>
         <div class="card-actions">
           <button class="btn btn-outline-secondary button secondary" data-suggestion-id="${item.id}">View full details</button>
@@ -51,6 +59,27 @@ function renderSuggestion(item) {
         </div>
       </div>
     </article>`;
+}
+
+async function showSuggestionConfidence(item) {
+  showDetails(`${(item.confidence * 100).toFixed(0)}% confidence`, "SUGGESTION DECISION", `
+    <div class="trace-loading">Loading confidence evidence and calculation…</div>`);
+  try {
+    const trace = await api(`/v1/events/${encodeURIComponent(item.event_id)}/trace`);
+    const classification = trace.stages.find(stage => stage.key === "classification");
+    const confidence = trace.stages.find(stage => stage.key === "confidence");
+    $("#details-content").innerHTML = `
+      <div class="detail-summary">
+        <span class="category ${escapeHtml(item.agent_type)}">${escapeHtml(item.agent_type)}</span>
+        <span class="pill ${escapeHtml(item.status)}">${escapeHtml(item.status)}</span>
+        <strong>${(item.confidence * 100).toFixed(1)}%</strong>
+      </div>
+      <div class="trace-intro"><div><p class="eyebrow">HOW THIS SCORE WAS PRODUCED</p><h3>Confidence evidence</h3><p>Classification confidence selects the specialist; suggestion confidence determines suppression, review, or readiness.</p></div></div>
+      ${classification?.details?.category ? renderClassificationDecision(classification.details) : ""}
+      ${confidence ? renderSuggestionConfidenceCalculation(confidence.details) : ""}`;
+  } catch (error) {
+    $("#details-content").innerHTML = `<div class="empty-state">${escapeHtml(error.message)}</div>`;
+  }
 }
 
 async function decideSuggestion(event) {
