@@ -52,8 +52,8 @@ const apiUiUsage = {
 
 function apiUsage(method, path, operation) {
   return apiUiUsage[`${method.toUpperCase()} ${path}`] || {
-    purpose: operation.description || "ART lifecycle operation.",
-    use: "Use through an authenticated ART integration.",
+    purpose: operation.description || "Runtime API operation.",
+    use: "Use through the active runtime API profile.",
     data: "See the OpenAPI schema for persisted fields.",
     input: "See interactive API docs for parameters."
   };
@@ -67,11 +67,12 @@ async function loadApis() {
   try {
     const contract = await api("/openapi.json");
     const endpoints = Object.entries(contract.paths || {})
-      .filter(([path]) => path.startsWith("/v1/art/"))
       .flatMap(([path, operations]) => Object.entries(operations)
         .filter(([method]) => ["get", "post", "put", "patch", "delete"].includes(method))
         .map(([method, operation]) => ({path, method, operation}))
-      );
+      )
+      .sort((left, right) => left.path.localeCompare(right.path)
+        || left.method.localeCompare(right.method));
     container.className = "api-list";
     container.innerHTML = endpoints.length ? endpoints.map(({path, method, operation}) => {
       const usage = apiUsage(method, path, operation);
@@ -90,7 +91,7 @@ async function loadApis() {
         </div>
         <span class="category">${escapeHtml((operation.tags || ["Operations"])[0])}</span>
       </article>`;
-    }).join("") : `<div class="empty-state">No ART lifecycle APIs are exposed in this profile.</div>`;
+    }).join("") : `<div class="empty-state">No APIs are exposed in this profile.</div>`;
   } catch (error) {
     container.className = "api-list empty-state";
     container.textContent = `Unable to load APIs: ${error.message}`;
