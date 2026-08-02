@@ -7,6 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     """Validated application settings loaded from environment variables or `.env`."""
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     service_name: str = "auto-healing-agent-runtime"
@@ -16,6 +17,12 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://healing:healing@localhost:5432/healing"
     api_key: str = "change-me"
     worker_poll_seconds: float = 1.0
+    test_rerun_enabled: bool = True
+    test_rerun_root: str = "tests"
+    test_rerun_pytest_path: str = ".venv/bin/pytest"
+    test_rerun_timeout_seconds: float = Field(300, gt=0, le=3600)
+    test_rerun_output_max_length: int = Field(12000, ge=1000, le=100000)
+    test_reanalysis_max_attempts: int = Field(2, ge=0, le=10)
     confidence_review_threshold: float = Field(0.60, ge=0, le=1)
     confidence_delivery_threshold: float = Field(0.80, ge=0, le=1)
     ai_provider: str = "deterministic"

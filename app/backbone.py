@@ -55,7 +55,7 @@ def decode_backbone_event(
             "specversion": kafka_headers["ce_specversion"],
             "id": kafka_headers.get("ce_id"),
             "source": kafka_headers.get("ce_source"),
-            "type": kafka_headers.get("ce_type"),
+            "type": kafka_headers.get("ce_type") or "unclassified.failure",
             "subject": kafka_headers.get("ce_subject"),
             "correlationid": kafka_headers.get("ce_correlationid"),
             "severity": kafka_headers.get(

@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models import EventStatus, SuggestionStatus
 from app.runtime_config import get_runtime_rules
@@ -47,6 +47,12 @@ class DecisionCreate(BaseModel):
     reason: str = Field(min_length=1, max_length=1000)
 
 
+class RecoveryEvaluationCreate(BaseModel):
+    before: dict[str, float]
+    after: dict[str, float]
+    observation_seconds: int = Field(default=300, ge=30, le=86400)
+
+
 class PolicyCreate(BaseModel):
     name: str
     rules: dict[str, Any]
@@ -63,7 +69,7 @@ class CloudEventCreate(BaseModel):
     specversion: str = Field(pattern=r"^1\.0$")
     id: str = Field(min_length=1, max_length=200)
     source: str = Field(min_length=1, max_length=200)
-    type: str = Field(min_length=1, max_length=150)
+    type: str = Field(default="unclassified.failure", min_length=1, max_length=150)
     subject: str | None = Field(default=None, max_length=300)
     time: datetime | None = None
     dataschema: str | None = None
@@ -71,6 +77,14 @@ class CloudEventCreate(BaseModel):
     data: dict[str, Any]
     severity: str = Field(default="error", pattern="^(info|warning|error|critical)$")
     correlationid: str | None = Field(default=None, max_length=300)
+
+    @field_validator("type", mode="before")
+    @classmethod
+    def default_missing_type(cls, value: Any) -> Any:
+        """Keep an actionable error when a backbone omits its event type."""
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return "unclassified.failure"
+        return value
 
 
 class SubscriptionCreate(BaseModel):

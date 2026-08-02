@@ -10,6 +10,7 @@ from app.models import (
     AuditLog,
     Event,
     RemediationReference,
+    Outbox,
     Suggestion,
     SuggestionDecision,
     SuggestionStatus,
@@ -44,6 +45,9 @@ async def record_suggestion_decision(
     """Record a decision and keep the remediation reference library in sync."""
 
     decision_value = decision_request.decision
+    queue_test_rerun = (
+        decision_value == "accepted" and suggestion.status != SuggestionStatus.ACCEPTED
+    )
     suggestion.status = SuggestionStatus(decision_value)
 
     await _upsert_decision(
@@ -70,6 +74,17 @@ async def record_suggestion_decision(
             details={"reason": decision_request.reason},
         )
     )
+    if queue_test_rerun:
+        session.add(
+            Outbox(
+                topic="test.rerun.requested",
+                aggregate_id=suggestion.id,
+                payload={
+                    "suggestion_id": str(suggestion.id),
+                    "event_id": str(event.id),
+                },
+            )
+        )
 
 
 async def _upsert_decision(
@@ -80,9 +95,7 @@ async def _upsert_decision(
 ) -> None:
     """Create or update the single operator decision for a suggestion."""
     decision = await session.scalar(
-        select(SuggestionDecision).where(
-            SuggestionDecision.suggestion_id == suggestion.id
-        )
+        select(SuggestionDecision).where(SuggestionDecision.suggestion_id == suggestion.id)
     )
 
     if decision is None:
@@ -110,9 +123,7 @@ async def _upsert_reference(
 ) -> None:
     """Synchronize reusable remediation learning with the latest decision."""
     reference = await session.scalar(
-        select(RemediationReference).where(
-            RemediationReference.suggestion_id == suggestion.id
-        )
+        select(RemediationReference).where(RemediationReference.suggestion_id == suggestion.id)
     )
 
     values = {

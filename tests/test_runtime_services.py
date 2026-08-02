@@ -100,6 +100,43 @@ def test_process_event_marks_failure_and_reraises():
     )
 
 
+def test_forced_reanalysis_marks_candidate_as_alternative_negative_learning():
+    event = processing_event()
+    event.status = EventStatus.COMPLETED
+    event.payload = {
+        **event.payload,
+        "art_failed_suggestions": [{"suggestion_id": "failed-1", "title": "Increase timeout"}],
+    }
+    session = SimpleNamespace(scalar=AsyncMock(return_value=event), add=MagicMock())
+    lifecycle = SimpleNamespace(
+        start=AsyncMock(), record_candidate=AsyncMock(), complete=AsyncMock()
+    )
+    candidate = Candidate("api", "Fix timeout", "trace evidence", {"timeout": 10}, 0.9)
+    created = AsyncMock(return_value=SimpleNamespace())
+
+    with (
+        patch("app.processor.LifecycleRecorder", return_value=lifecycle),
+        patch("app.processor.KnowledgeService.search", new=AsyncMock(return_value=[])),
+        patch(
+            "app.processor.routed_agents",
+            return_value=(
+                FailureRoute("api", 0.9, ("endpoint",), ()),
+                [SimpleNamespace(suggest=AsyncMock(return_value=candidate))],
+            ),
+        ),
+        patch("app.processor.AIService.enrich", new=AsyncMock(return_value=candidate)),
+        patch("app.processor._create_suggestion", new=created),
+        patch("app.processor._queue_ready_webhooks", new=AsyncMock()),
+    ):
+        asyncio.run(process_event(session, event.id, force=True))
+
+    alternative = created.await_args.args[2]
+    assert alternative.title.startswith("Alternative investigation:")
+    assert alternative.proposed_changes["action"] == "investigate_alternative_remediation"
+    assert alternative.proposed_changes["must_not_repeat_suggestion_ids"] == ["failed-1"]
+    assert alternative.base_confidence == 0.79
+
+
 def test_create_suggestion_applies_policy_and_audits():
     event = processing_event()
     session = SimpleNamespace(add=MagicMock(), flush=AsyncMock())

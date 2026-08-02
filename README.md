@@ -229,6 +229,53 @@ Example policy rules:
 
 The service separates suggestions from execution so change-management, approval, rollback, and deployment systems remain authoritative.
 
+## Cross-sector runtime intelligence
+
+Every native or CloudEvent incident is enriched at ingestion with an
+OpenTelemetry-aligned `art_context`, a stable `art_incident_fingerprint`, and
+an explainable `art_business_impact` score. The fingerprint groups equivalent
+failures without depending on volatile error messages; impact combines
+technical severity, business criticality, affected users, and revenue exposure
+into a P1-P4 priority.
+
+When a failure matches an allow-listed remediation, the suggestion contains a
+versioned `playbook` with preconditions, validation checks, and rollback
+instructions. Playbooks are always emitted in `dry-run` mode with
+`execution_authorized: false`; ART remains suggestion-only unless a governed
+external executor is added.
+
+After an approved action, submit measurable before/after telemetry to:
+
+```text
+POST /v1/suggestions/{suggestion_id}/recovery-evaluation
+```
+
+Supported health measures currently include `error_rate`, `latency_ms`, and
+`unhealthy_instances`. ART persists the evidence and reports `recovered`,
+`partially_recovered`, `no_effect`, or `insufficient_evidence` in the incident
+trace and audit history.
+
+Accepting a suggestion also queues a durable `test.rerun.requested` job. The
+worker reruns the event's `test_file` and optional `test_name` when the file
+exists beneath the configured `TEST_RERUN_ROOT` (default `tests`). It invokes
+pytest without a shell, enforces `TEST_RERUN_TIMEOUT_SECONDS`, and records an
+execution intent, result reference, outcome feedback, and audit entry. Missing
+or unsafe targets are recorded as `SKIPPED`; failed tests do not mark a
+remediation as recovered.
+
+The local runner can execute only tests present in the ART process workspace.
+If a backbone event names a test from another application repository, mount or
+check out that repository beneath `TEST_RERUN_ROOT`, or use an external CI test
+adapter. ART reports negative learning and recovery as blocked when a test is
+skipped; it does not misclassify missing test code as a remediation failure.
+
+When a rerun fails, ART marks the accepted remediation reference inactive and
+stores `test_failed` as negative evidence. It then queues
+`event.reanalysis.requested`, creates an alternative investigation suggestion
+that identifies proposals which must not be repeated, and caps automatic
+reanalysis at `TEST_REANALYSIS_MAX_ATTEMPTS` (default `2`). Exceeding the cap
+creates a human-investigation escalation instead of an infinite retry loop.
+
 ## Enterprise ART lifecycle API
 
 The document-driven enterprise model is exposed under `/v1/art`. It includes

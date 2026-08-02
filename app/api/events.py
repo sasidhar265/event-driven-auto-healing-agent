@@ -14,20 +14,35 @@ from app.schemas import CloudEventCreate, EventCreate, EventRead
 from app.security import Principal, principal
 from app.services.routing import FailureRouter, route_details
 
+
 @operations_router.post("/events", response_model=EventRead, status_code=status.HTTP_202_ACCEPTED)
-async def ingest_event(body: EventCreate, auth: Principal = Depends(principal), session: AsyncSession = Depends(get_session)):
+async def ingest_event(
+    body: EventCreate,
+    auth: Principal = Depends(principal),
+    session: AsyncSession = Depends(get_session),
+):
     """Accept a native incident and atomically queue it for worker processing."""
     return await persist_event(body, auth, session)
 
 
-@integration_router.post("/events/cloudevents", response_model=EventRead, status_code=status.HTTP_202_ACCEPTED)
-async def ingest_cloud_event(body: CloudEventCreate, auth: Principal = Depends(principal), session: AsyncSession = Depends(get_session)):
+@integration_router.post(
+    "/events/cloudevents", response_model=EventRead, status_code=status.HTTP_202_ACCEPTED
+)
+async def ingest_cloud_event(
+    body: CloudEventCreate,
+    auth: Principal = Depends(principal),
+    session: AsyncSession = Depends(get_session),
+):
     """Accept a CloudEvents 1.0 incident through the optional integration API."""
     return await persist_event(cloud_event_to_event(body), auth, session)
 
 
 @operations_router.get("/events/{event_id}", response_model=EventRead)
-async def get_event(event_id: uuid.UUID, auth: Principal = Depends(principal), session: AsyncSession = Depends(get_session)):
+async def get_event(
+    event_id: uuid.UUID,
+    auth: Principal = Depends(principal),
+    session: AsyncSession = Depends(get_session),
+):
     """Return one event only when it belongs to the authenticated tenant."""
     event = await event_queries.get_event(session, event_id, auth.tenant_id)
     if not event:
@@ -50,28 +65,46 @@ async def get_event_trace(
         raise HTTPException(404, "Event not found")
 
     classification_record = next(
-        (
-            record
-            for record in audit_records
-            if record.action == "event.classified"
-        ),
+        (record for record in audit_records if record.action == "event.classified"),
         None,
     )
     classification = dict(classification_record.details) if classification_record else {}
+    recovery_record = next(
+        (record for record in audit_records if record.action == "suggestion.recovery_evaluated"),
+        None,
+    )
+    test_rerun_record = next(
+        (
+            record
+            for record in reversed(audit_records)
+            if record.action == "suggestion.test_rerun_completed"
+        ),
+        None,
+    )
+    test_rerun_status = (
+        str(test_rerun_record.details.get("status", "")).upper() if test_rerun_record else None
+    )
     if classification:
         current_explanation = route_details(FailureRouter().classify(event))
         classification.setdefault("category_scores", current_explanation["category_scores"])
         classification.setdefault(
             "confidence_calculation", current_explanation["confidence_calculation"]
         )
-    primary_suggestion = suggestions[0] if suggestions else None
-    confidence = primary_suggestion.confidence if primary_suggestion else None
-    suggestion_status = (
-        primary_suggestion.status.value if primary_suggestion else "pending"
+    reanalysis_record = next(
+        (
+            record
+            for record in reversed(audit_records)
+            if record.action in {"event.reanalysis_queued", "event.reanalysis_escalated"}
+        ),
+        None,
     )
+    primary_suggestion = suggestions[-1] if suggestions else None
+    confidence = primary_suggestion.confidence if primary_suggestion else None
+    suggestion_status = primary_suggestion.status.value if primary_suggestion else "pending"
     suggestion_confidence_calculation = (
         primary_suggestion.policy_result.get("confidence_calculation", {})
-        if primary_suggestion else {}
+        if primary_suggestion
+        else {}
     )
     if primary_suggestion and not suggestion_confidence_calculation:
         suggestion_confidence_calculation = {
@@ -101,6 +134,8 @@ async def get_event_trace(
                 "external_id": event.external_id,
                 "event_type": event.event_type,
                 "correlation_id": event.correlation_key,
+                "incident_fingerprint": event.payload.get("art_incident_fingerprint"),
+                "normalized_context": event.payload.get("art_context", {}),
             },
         },
         {
@@ -122,9 +157,7 @@ async def get_event_trace(
             "name": "Failure classification",
             "status": "completed" if classification else "pending",
             "timestamp": (
-                classification_record.created_at
-                if classification_record
-                else event.processed_at
+                classification_record.created_at if classification_record else event.processed_at
             ),
             "summary": "Structured evidence and weighted signals select the responsible specialist.",
             "api": "Worker: FailureRouter.classify",
@@ -148,17 +181,20 @@ async def get_event_trace(
             "api": "Worker: specialist routing and ART lifecycle",
             "data": ["events.payload", "art.impact_assessments", "art.impact_dependencies"],
             "details": {
-                key: event.payload.get(key)
-                for key in (
-                    "source_file",
-                    "method_name",
-                    "test_file",
-                    "test_name",
-                    "endpoint",
-                    "resource_name",
-                    "dependency_name",
-                )
-                if event.payload.get(key) is not None
+                "business_impact": event.payload.get("art_business_impact", {}),
+                **{
+                    key: event.payload.get(key)
+                    for key in (
+                        "source_file",
+                        "method_name",
+                        "test_file",
+                        "test_name",
+                        "endpoint",
+                        "resource_name",
+                        "dependency_name",
+                    )
+                    if event.payload.get(key) is not None
+                },
             },
         },
         {
@@ -213,12 +249,86 @@ async def get_event_trace(
             "api": "POST /v1/suggestions/{suggestion_id}/decision",
             "data": ["suggestions", "suggestion_decisions", "audit_logs"],
             "details": {
-                "suggestion_id": (
-                    str(primary_suggestion.id) if primary_suggestion else None
-                ),
+                "suggestion_id": (str(primary_suggestion.id) if primary_suggestion else None),
                 "status": suggestion_status,
                 "total_suggestions": len(suggestions),
             },
+        },
+        {
+            "key": "test_rerun",
+            "name": "Accepted-suggestion test rerun",
+            "status": (test_rerun_status.lower() if test_rerun_status else "pending"),
+            "timestamp": test_rerun_record.created_at if test_rerun_record else None,
+            "summary": "An accepted suggestion queues its allow-listed test target for a governed pytest rerun.",
+            "api": "Worker: test.rerun.requested",
+            "data": [
+                "outbox",
+                "art.execution_intents",
+                "art.execution_result_refs",
+                "art.outcome_feedback",
+                "audit_logs",
+            ],
+            "details": dict(test_rerun_record.details) if test_rerun_record else {},
+        },
+        {
+            "key": "negative_learning",
+            "name": "Negative learning and reanalysis",
+            "status": (
+                "escalated"
+                if reanalysis_record and reanalysis_record.action == "event.reanalysis_escalated"
+                else "queued"
+                if reanalysis_record
+                else "blocked"
+                if test_rerun_status == "SKIPPED"
+                else "not_required"
+                if test_rerun_status == "SUCCESS"
+                else "pending"
+            ),
+            "timestamp": reanalysis_record.created_at if reanalysis_record else None,
+            "summary": "Failed reruns invalidate ineffective remediation evidence and trigger bounded alternative analysis.",
+            "api": "Worker: event.reanalysis.requested",
+            "data": ["remediation_references", "outbox", "audit_logs"],
+            "details": (
+                dict(reanalysis_record.details)
+                if reanalysis_record
+                else {
+                    "reason": (
+                        "The test did not execute, so ART has no remediation result to learn from."
+                        if test_rerun_status == "SKIPPED"
+                        else "The test passed; negative learning is not required."
+                        if test_rerun_status == "SUCCESS"
+                        else "Waiting for a failed test rerun."
+                    )
+                }
+            ),
+        },
+        {
+            "key": "recovery_verification",
+            "name": "Recovery verification",
+            "status": (
+                recovery_record.details.get("status", "pending")
+                if recovery_record
+                else "blocked"
+                if test_rerun_status in {"SKIPPED", "FAILED"}
+                else "pending"
+            ),
+            "timestamp": recovery_record.created_at if recovery_record else None,
+            "summary": "Before/after telemetry verifies whether the remediation improved service health.",
+            "api": "POST /v1/suggestions/{suggestion_id}/recovery-evaluation",
+            "data": ["audit_logs"],
+            "details": (
+                dict(recovery_record.details)
+                if recovery_record
+                else {
+                    "reason": (
+                        "Recovery verification requires a completed test and before/after telemetry."
+                        if test_rerun_status == "SKIPPED"
+                        else "Recovery verification cannot pass while the validation test is failing."
+                        if test_rerun_status == "FAILED"
+                        else "Submit before/after telemetry to evaluate recovery."
+                    )
+                }
+            ),
         },
     ]
     return {
