@@ -79,6 +79,9 @@ def test_accepting_suggestion_creates_decision_reference_and_audit():
     records = [call.args[0] for call in session.add.call_args_list]
     assert suggestion.status == SuggestionStatus.ACCEPTED
     assert any(isinstance(record, SuggestionDecision) for record in records)
+    rerun = next(record for record in records if isinstance(record, Outbox))
+    assert rerun.topic == "test.rerun.requested"
+    assert rerun.aggregate_id == suggestion.id
     reference = next(record for record in records if isinstance(record, RemediationReference))
     assert reference.active is True
     assert reference.fingerprint == event_fingerprint(event)
@@ -160,6 +163,10 @@ def test_persist_event_is_idempotent_and_creates_outbox_work():
 
     assert stored.tenant_id == "acme"
     records = [call.args[0] for call in session.add.call_args_list]
+    created_event = next(record for record in records if isinstance(record, Event))
+    assert created_event.payload["art_context"]["event_type"] == "api.timeout"
+    assert created_event.payload["art_incident_fingerprint"]
+    assert created_event.payload["art_business_impact"]["priority"] == "P3"
     assert any(isinstance(record, Outbox) for record in records)
     assert any(isinstance(record, AuditLog) for record in records)
     session.commit.assert_awaited_once()

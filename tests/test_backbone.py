@@ -45,6 +45,40 @@ def test_decodes_binary_cloud_event_headers():
     assert envelope.cloud_event["data"]["failed_locator"]["strategy"] == "xpath"
 
 
+@pytest.mark.parametrize("raw_type", [None, "", "   "])
+def test_structured_cloud_event_defaults_missing_type(raw_type):
+    raw = {
+        "specversion": "1.0",
+        "id": "failure-without-type",
+        "source": "ci://unknown",
+        "tenantid": "acme",
+        "data": {"exception_type": "RuntimeError", "message": "unexpected failure"},
+    }
+    if raw_type is not None:
+        raw["type"] = raw_type
+
+    envelope = decode_backbone_event(json.dumps(raw).encode())
+    event = cloud_event_to_event(CloudEventCreate.model_validate(envelope.cloud_event))
+
+    assert event.event_type == "unclassified.failure"
+    assert event.payload["exception_type"] == "RuntimeError"
+
+
+def test_binary_cloud_event_defaults_missing_type_header():
+    envelope = decode_backbone_event(
+        b'{"message":"unknown error"}',
+        [
+            ("ce_specversion", b"1.0"),
+            ("ce_id", b"failure-unknown"),
+            ("ce_source", b"ci://unknown"),
+            ("ce_tenantid", b"acme"),
+        ],
+    )
+
+    event = cloud_event_to_event(CloudEventCreate.model_validate(envelope.cloud_event))
+    assert event.event_type == "unclassified.failure"
+
+
 def test_rejects_event_without_tenant():
     raw = {
         "specversion": "1.0", "id": "failure-44",

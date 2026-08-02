@@ -9,6 +9,7 @@ CORE_PATHS = {
     "/v1/events/{event_id}/trace",
     "/v1/suggestions",
     "/v1/suggestions/{suggestion_id}/decision",
+    "/v1/suggestions/{suggestion_id}/recovery-evaluation",
     "/v1/audit",
 }
 

@@ -12,8 +12,11 @@ def javascript_source() -> str:
 def test_operations_ui_contains_core_workflows():
     html = (STATIC / "index.html").read_text()
     for element_id in (
-        'id="dashboard"', 'id="simulate"', 'id="suggestions"',
-        'id="audit"', 'id="event-form"',
+        'id="dashboard"',
+        'id="simulate"',
+        'id="suggestions"',
+        'id="audit"',
+        'id="event-form"',
         'id="api-explorer"',
     ):
         assert element_id in html
@@ -70,8 +73,16 @@ def test_primary_navigation_uses_top_glass_layout():
 def test_operations_ui_defines_failure_domains_and_real_api_calls():
     javascript = javascript_source()
     for category in (
-        "ui", "api", "logic", "functional", "test_data", "database",
-        "infrastructure", "dependency", "security", "performance",
+        "ui",
+        "api",
+        "logic",
+        "functional",
+        "test_data",
+        "database",
+        "infrastructure",
+        "dependency",
+        "security",
+        "performance",
     ):
         assert f"  {category}:" in javascript
     assert 'api("/v1/events"' in javascript
@@ -123,9 +134,23 @@ def test_audit_trail_supports_time_environment_and_correlation_filters():
     ):
         assert element_id in html
     for range_value in (
-        "30m", "1h", "2h", "4h", "6h", "12h",
-        "1d", "2d", "3d", "4d", "5d", "6d",
-        "1w", "2w", "3w", "4w", "custom",
+        "30m",
+        "1h",
+        "2h",
+        "4h",
+        "6h",
+        "12h",
+        "1d",
+        "2d",
+        "3d",
+        "4d",
+        "5d",
+        "6d",
+        "1w",
+        "2w",
+        "3w",
+        "4w",
+        "custom",
     ):
         assert f'value="{range_value}"' in html
     assert 'query.set("correlation_id", correlationId)' in javascript
@@ -169,7 +194,7 @@ def test_detail_actions_use_modal_overlays():
     assert "Winning score" in javascript
     assert "Category separation" in javascript
     assert "ambiguity cap" in javascript
-    assert 'data-confidence-id=' in javascript
+    assert "data-confidence-id=" in javascript
     assert "showSuggestionConfidence" in javascript
     assert "renderSuggestionConfidenceCalculation" in javascript
     assert "Specialist evidence score" in javascript

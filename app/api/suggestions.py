@@ -7,13 +7,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.routers import api_settings, internal_router, operations_router
 from app.db import get_session
+from app.models import AuditLog
 from app.repositories.suggestions import commands as suggestion_commands
 from app.repositories.suggestions import queries as suggestion_queries
-from app.schemas import DecisionCreate, SuggestionRead
+from app.schemas import DecisionCreate, RecoveryEvaluationCreate, SuggestionRead
 from app.security import Principal, principal
+from app.services.runtime_intelligence import evaluate_recovery
+
 
 @operations_router.get("/suggestions", response_model=list[SuggestionRead])
-async def list_suggestions(event_id: uuid.UUID | None = None, auth: Principal = Depends(principal), session: AsyncSession = Depends(get_session)):
+async def list_suggestions(
+    event_id: uuid.UUID | None = None,
+    auth: Principal = Depends(principal),
+    session: AsyncSession = Depends(get_session),
+):
     """List tenant suggestions, optionally restricted to one source event."""
     return await suggestion_queries.list_suggestions(
         session,
@@ -24,7 +31,12 @@ async def list_suggestions(event_id: uuid.UUID | None = None, auth: Principal = 
 
 
 @operations_router.post("/suggestions/{suggestion_id}/decision", response_model=SuggestionRead)
-async def decide(suggestion_id: uuid.UUID, body: DecisionCreate, auth: Principal = Depends(principal), session: AsyncSession = Depends(get_session)):
+async def decide(
+    suggestion_id: uuid.UUID,
+    body: DecisionCreate,
+    auth: Principal = Depends(principal),
+    session: AsyncSession = Depends(get_session),
+):
     """Accept or reject a locked suggestion and update reusable learning records."""
     item = await suggestion_queries.get_suggestion_for_update(
         session, suggestion_id, auth.tenant_id
@@ -32,13 +44,42 @@ async def decide(suggestion_id: uuid.UUID, body: DecisionCreate, auth: Principal
     if not item:
         raise HTTPException(404, "Suggestion not found")
 
-    event = await suggestion_queries.get_source_event(
-        session, item.event_id, auth.tenant_id
-    )
+    event = await suggestion_queries.get_source_event(session, item.event_id, auth.tenant_id)
     if not event:
         raise HTTPException(404, "Source event not found")
 
     return await suggestion_commands.apply_decision(session, item, event, body, auth)
+
+
+@operations_router.post("/suggestions/{suggestion_id}/recovery-evaluation")
+async def evaluate_suggestion_recovery(
+    suggestion_id: uuid.UUID,
+    body: RecoveryEvaluationCreate,
+    auth: Principal = Depends(principal),
+    session: AsyncSession = Depends(get_session),
+):
+    """Persist an evidence-based post-action recovery evaluation."""
+    item = await suggestion_queries.get_suggestion_for_update(
+        session, suggestion_id, auth.tenant_id
+    )
+    if not item:
+        raise HTTPException(404, "Suggestion not found")
+    result = {
+        **evaluate_recovery(body.before, body.after),
+        "observation_seconds": body.observation_seconds,
+    }
+    session.add(
+        AuditLog(
+            tenant_id=auth.tenant_id,
+            actor=auth.actor,
+            action="suggestion.recovery_evaluated",
+            resource_type="suggestion",
+            resource_id=str(item.id),
+            details=result,
+        )
+    )
+    await session.commit()
+    return result
 
 
 @internal_router.get("/references")
@@ -53,14 +94,22 @@ async def list_references(
     )
     return [
         {
-            "id": row.id, "event_id": row.event_id,
-            "suggestion_id": row.suggestion_id, "event_type": row.event_type,
-            "severity": row.severity, "fingerprint": row.fingerprint,
-            "agent_type": row.agent_type, "title": row.title,
-            "rationale": row.rationale, "proposed_changes": row.proposed_changes,
-            "confidence": row.confidence, "outcome": row.outcome,
-            "decision_reason": row.decision_reason, "active": row.active,
-            "use_count": row.use_count, "last_used_at": row.last_used_at,
+            "id": row.id,
+            "event_id": row.event_id,
+            "suggestion_id": row.suggestion_id,
+            "event_type": row.event_type,
+            "severity": row.severity,
+            "fingerprint": row.fingerprint,
+            "agent_type": row.agent_type,
+            "title": row.title,
+            "rationale": row.rationale,
+            "proposed_changes": row.proposed_changes,
+            "confidence": row.confidence,
+            "outcome": row.outcome,
+            "decision_reason": row.decision_reason,
+            "active": row.active,
+            "use_count": row.use_count,
+            "last_used_at": row.last_used_at,
             "created_at": row.created_at,
         }
         for row in rows

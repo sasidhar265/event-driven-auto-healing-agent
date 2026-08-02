@@ -15,12 +15,13 @@ from app.services import (
     Candidate,
     KnowledgeService,
     PolicyEngine,
+    plan_playbook,
     route_details,
     routed_agents,
 )
 
 
-async def process_event(session: AsyncSession, event_id: uuid.UUID) -> None:
+async def process_event(session: AsyncSession, event_id: uuid.UUID, *, force: bool = False) -> None:
     """Turn one locked event into governed suggestions and lifecycle records.
 
     The caller owns the transaction. Completed or missing events are ignored;
@@ -28,7 +29,7 @@ async def process_event(session: AsyncSession, event_id: uuid.UUID) -> None:
     """
     rules = get_runtime_rules()
     event = await processing_queries.lock_event(session, event_id)
-    if not event or event.status == EventStatus.COMPLETED:
+    if not event or (event.status == EventStatus.COMPLETED and not force):
         return
 
     event.status = EventStatus.PROCESSING
@@ -55,13 +56,57 @@ async def process_event(session: AsyncSession, event_id: uuid.UUID) -> None:
                 continue
 
             candidate = await AIService().enrich(event, candidate, evidence)
+            failed_proposals = event.payload.get("art_failed_suggestions", [])
+            if failed_proposals:
+                candidate = replace(
+                    candidate,
+                    title=f"Alternative investigation: {candidate.title}",
+                    rationale=(
+                        "A previously accepted remediation failed its test rerun. "
+                        "Treat it as negative evidence and investigate a different cause. "
+                        f"{candidate.rationale}"
+                    ),
+                    proposed_changes={
+                        **candidate.proposed_changes,
+                        "action": "investigate_alternative_remediation",
+                        "negative_evidence": failed_proposals,
+                        "must_not_repeat_suggestion_ids": [
+                            item["suggestion_id"]
+                            for item in failed_proposals
+                            if item.get("suggestion_id")
+                        ],
+                    },
+                    base_confidence=min(candidate.base_confidence, 0.79),
+                )
             candidate = replace(
                 candidate,
                 proposed_changes={
                     **candidate.proposed_changes,
                     "routing": route_details(route),
+                    "business_impact": event.payload.get("art_business_impact", {}),
+                    "incident_fingerprint": event.payload.get("art_incident_fingerprint"),
                 },
             )
+            playbook = plan_playbook(
+                " ".join(
+                    str(value)
+                    for value in (
+                        event.event_type,
+                        event.payload.get("error"),
+                        event.payload.get("message"),
+                        event.payload.get("exception_type"),
+                        candidate.title,
+                        candidate.rationale,
+                    )
+                    if value
+                ),
+                event.payload.get("art_context", {}),
+            )
+            if playbook:
+                candidate = replace(
+                    candidate,
+                    proposed_changes={**candidate.proposed_changes, "playbook": playbook},
+                )
 
             suggestion = await _create_suggestion(
                 session,
@@ -86,9 +131,7 @@ async def process_event(session: AsyncSession, event_id: uuid.UUID) -> None:
         )
     except Exception as exc:
         event.status = EventStatus.FAILED
-        event.error = str(exc)[
-            :get_runtime_rules().delivery.error_message_max_length
-        ]
+        event.error = str(exc)[: get_runtime_rules().delivery.error_message_max_length]
         await lifecycle.complete(failed=True, reason=event.error)
         raise
 
@@ -120,14 +163,11 @@ async def _queue_ready_webhooks(
     if suggestion.status != SuggestionStatus.READY:
         return
 
-    subscriptions = await processing_queries.list_active_subscriptions(
-        session, event.tenant_id
-    )
+    subscriptions = await processing_queries.list_active_subscriptions(session, event.tenant_id)
 
     for subscription in subscriptions:
         accepts_ready_events = (
-            ready_event_type in subscription.event_types
-            or "*" in subscription.event_types
+            ready_event_type in subscription.event_types or "*" in subscription.event_types
         )
         if accepts_ready_events:
             processing_commands.queue_delivery(session, event, suggestion, subscription)
