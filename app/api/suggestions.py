@@ -1,13 +1,14 @@
 """Suggestion review, decision, and remediation-reference endpoints."""
 
+import json
 import uuid
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.routers import api_settings, internal_router, operations_router
 from app.db import get_session
-from app.models import AuditLog
+from app.models import AuditLog, SuggestionStatus
 from app.repositories.suggestions import commands as suggestion_commands
 from app.repositories.suggestions import queries as suggestion_queries
 from app.schemas import DecisionCreate, RecoveryEvaluationCreate, SuggestionRead
@@ -17,16 +18,31 @@ from app.services.runtime_intelligence import evaluate_recovery
 
 @operations_router.get("/suggestions", response_model=list[SuggestionRead])
 async def list_suggestions(
+    response: Response,
     event_id: uuid.UUID | None = None,
+    correlation_id: str | None = Query(default=None, max_length=300),
+    limit: int = Query(default=api_settings.api_suggestion_limit, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    status_filter: SuggestionStatus | None = Query(default=None, alias="status"),
     auth: Principal = Depends(principal),
     session: AsyncSession = Depends(get_session),
 ):
-    """List tenant suggestions, optionally restricted to one source event."""
+    """List tenant suggestions, optionally filtered by event or correlation ID."""
+    counts = await suggestion_queries.count_suggestions_by_status(
+        session, auth.tenant_id, event_id, correlation_id
+    )
+    response.headers["X-Total-Count"] = str(
+        counts.get(status_filter.value, 0) if status_filter else counts["all"]
+    )
+    response.headers["X-Status-Counts"] = json.dumps(counts, separators=(",", ":"))
     return await suggestion_queries.list_suggestions(
         session,
         auth.tenant_id,
-        api_settings.api_suggestion_limit,
+        limit,
         event_id,
+        correlation_id,
+        status_filter,
+        offset,
     )
 
 

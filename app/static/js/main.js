@@ -20,8 +20,31 @@ function bindEvents() {
   $("#refresh-button").addEventListener("click", () => navigate(location.hash.slice(1) || "dashboard"));
   $("#export-audit").addEventListener("click", exportAudit);
   $("#reload-apis").addEventListener("click", loadApis);
+  $("#suggestion-filter-form").addEventListener("submit", event => {
+    event.preventDefault();
+    suggestionPage = 1;
+    loadSuggestions();
+  });
+  $("#clear-suggestion-search").addEventListener("click", () => {
+    $("#suggestion-correlation").value = "";
+    suggestionPage = 1;
+    loadSuggestions();
+  });
+  $("#suggestion-page-size").addEventListener("change", () => {
+    suggestionPage = 1;
+    loadSuggestions();
+  });
+  $("#suggestion-previous").addEventListener("click", () => {
+    suggestionPage -= 1;
+    loadSuggestions();
+  });
+  $("#suggestion-next").addEventListener("click", () => {
+    suggestionPage += 1;
+    loadSuggestions();
+  });
   $$(".filter").forEach(button => button.addEventListener("click", () => {
     suggestionFilter = button.dataset.status.toLowerCase();
+    suggestionPage = 1;
     $$(".filter").forEach(item => item.classList.toggle("active", item === button));
     loadSuggestions();
   }));

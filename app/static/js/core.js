@@ -19,14 +19,15 @@ function settings() {
 
 async function api(path, options = {}) {
   const config = settings();
+  const {includeResponse = false, ...fetchOptions} = options;
   const response = await fetch(`${config.base}${path}`, {
-    ...options,
+    ...fetchOptions,
     headers: {
       "Content-Type": "application/json",
       "X-API-Key": config.key,
       "X-Tenant-Id": config.tenant,
       "X-Actor": config.actor,
-      ...(options.headers || {})
+      ...(fetchOptions.headers || {})
     }
   });
   if (!response.ok) {
@@ -35,7 +36,8 @@ async function api(path, options = {}) {
     throw new Error(detail);
   }
   if (response.status === 204) return null;
-  return response.json();
+  const data = await response.json();
+  return includeResponse ? {data, response} : data;
 }
 
 function toast(message, error = false) {

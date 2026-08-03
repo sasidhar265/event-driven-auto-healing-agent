@@ -2,10 +2,10 @@
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, RemediationReference, Suggestion
+from app.models import Event, RemediationReference, Suggestion, SuggestionStatus
 
 
 async def list_suggestions(
@@ -13,16 +13,52 @@ async def list_suggestions(
     tenant_id: str,
     limit: int,
     event_id: uuid.UUID | None = None,
+    correlation_id: str | None = None,
+    status: SuggestionStatus | None = None,
+    offset: int = 0,
 ) -> list[Suggestion]:
-    """Return newest tenant suggestions, optionally for one source event."""
+    """Return newest tenant suggestions with their source correlation IDs."""
     query = (
-        select(Suggestion)
+        select(Suggestion, Event.correlation_key)
+        .join(Event, Event.id == Suggestion.event_id)
         .where(Suggestion.tenant_id == tenant_id)
         .order_by(Suggestion.created_at.desc())
     )
     if event_id:
         query = query.where(Suggestion.event_id == event_id)
-    return list((await session.scalars(query.limit(limit))).all())
+    if correlation_id:
+        query = query.where(Event.correlation_key.ilike(f"%{correlation_id}%"))
+    if status:
+        query = query.where(Suggestion.status == status)
+    rows = (await session.execute(query.offset(offset).limit(limit))).all()
+    suggestions = []
+    for suggestion, correlation_key in rows:
+        suggestion.correlation_id = correlation_key
+        suggestions.append(suggestion)
+    return suggestions
+
+
+async def count_suggestions_by_status(
+    session: AsyncSession,
+    tenant_id: str,
+    event_id: uuid.UUID | None = None,
+    correlation_id: str | None = None,
+) -> dict[str, int]:
+    """Count matching tenant suggestions by lifecycle status."""
+    query = (
+        select(Suggestion.status, func.count(Suggestion.id))
+        .join(Event, Event.id == Suggestion.event_id)
+        .where(Suggestion.tenant_id == tenant_id)
+        .group_by(Suggestion.status)
+    )
+    if event_id:
+        query = query.where(Suggestion.event_id == event_id)
+    if correlation_id:
+        query = query.where(Event.correlation_key.ilike(f"%{correlation_id}%"))
+    rows = (await session.execute(query)).all()
+    counts = {status.value: count for status, count in rows}
+    counts["all"] = sum(counts.values())
+    return counts
 
 
 async def get_suggestion_for_update(

@@ -182,6 +182,8 @@ const titles = {
 };
 let activeScenario = "ui";
 let suggestionFilter = "all";
+let suggestionPage = 1;
+let suggestionTotal = 0;
 let lastAudit = [];
 let recentEvents = [];
 let currentSuggestions = [];

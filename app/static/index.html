@@ -192,10 +192,33 @@
         </div>
         <div class="filter-bar">
           <button class="btn filter active" data-status="all">All <span class="filter-count">0</span></button>
+          <button class="btn filter" data-status="ready">Ready <span class="filter-count">0</span></button>
+          <button class="btn filter" data-status="review">Review <span class="filter-count">0</span></button>
+          <button class="btn filter" data-status="suppressed">Suppressed <span class="filter-count">0</span></button>
           <button class="btn filter" data-status="accepted">Accepted <span class="filter-count">0</span></button>
           <button class="btn filter" data-status="rejected">Rejected <span class="filter-count">0</span></button>
         </div>
+        <form class="panel suggestion-controls" id="suggestion-filter-form">
+          <label class="form-label suggestion-search">Correlation ID
+            <input class="form-control" id="suggestion-correlation" type="search" placeholder="Search complete or partial correlation ID">
+          </label>
+          <label class="form-label compact-field">Rows per page
+            <select class="form-select" id="suggestion-page-size">
+              <option value="5">5</option>
+              <option value="10" selected>10</option>
+              <option value="20">20</option>
+              <option value="50">50</option>
+            </select>
+          </label>
+          <button class="btn btn-primary button primary" type="submit">Search</button>
+          <button class="btn btn-outline-secondary button secondary" id="clear-suggestion-search" type="button">Clear</button>
+        </form>
         <div id="suggestion-list" class="suggestion-list"></div>
+        <nav class="suggestion-pagination hidden" id="suggestion-pagination" aria-label="Suggestion pages">
+          <button class="btn btn-outline-secondary button secondary" id="suggestion-previous" type="button">Previous</button>
+          <span id="suggestion-page-summary">Page 1 of 1</span>
+          <button class="btn btn-outline-secondary button secondary" id="suggestion-next" type="button">Next</button>
+        </nav>
       </section>
 
       <section id="audit" class="view">

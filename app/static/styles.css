@@ -348,6 +348,13 @@ textarea { resize: vertical; line-height: 1.5; font-family: ui-monospace, SFMono
 .filter.active { background: var(--ink); color: white; border-color: var(--ink); }
 .filter-count { min-width: 20px; padding: 2px 5px; border-radius: 10px; background: #e4e7e2; color: var(--ink); font-size: 9px; letter-spacing: 0; }
 .filter.active .filter-count { background: rgba(255,255,255,.2); color: white; }
+.suggestion-controls { display: flex; align-items: end; gap: 12px; margin-bottom: 18px; padding: 16px; }
+.suggestion-controls label { margin: 0; }
+.suggestion-search { flex: 1 1 360px; }
+.suggestion-controls .button { flex: 0 0 auto; margin: 0; }
+.suggestion-pagination { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 18px; }
+.suggestion-pagination span { min-width: 190px; color: var(--muted); font-size: 11px; text-align: center; }
+.suggestion-pagination .button { margin: 0; }
 .suggestion-list { display: grid; gap: 14px; }
 .suggestion-card { background: var(--glass-strong); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; display: grid; grid-template-columns: 7px 1fr; box-shadow: 0 14px 40px rgba(34,48,41,.08); backdrop-filter: blur(18px); }
 .suggestion-card > i { background: #c4cbc7; }.suggestion-card.ready > i { background: var(--green); }.suggestion-card.review > i { background: var(--amber); }.suggestion-card.suppressed > i { background: var(--red); }
@@ -356,6 +363,7 @@ textarea { resize: vertical; line-height: 1.5; font-family: ui-monospace, SFMono
 .suggestion-top h3 { font: 500 19px Georgia, serif; margin: 7px 0; }
 .suggestion-top p { color: var(--muted); line-height: 1.55; max-width: 760px; margin: 0; }
 .suggestion-meta { display: flex; gap: 8px; align-items: center; }
+.suggestion-meta code { max-width: 320px; overflow: hidden; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .confidence-number { font: 500 25px Georgia, serif; color: var(--green); text-align: right; }
 .confidence-number small { display: block; font: 800 8px Inter, sans-serif; color: var(--muted); letter-spacing: .1em; }
 .confidence-button { min-height: 0; padding: 8px 10px; border: 1px solid transparent; border-radius: 13px; background: rgba(36,107,74,.06); transition: .18s ease; }

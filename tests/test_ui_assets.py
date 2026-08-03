@@ -87,7 +87,7 @@ def test_operations_ui_defines_failure_domains_and_real_api_calls():
     ):
         assert f"  {category}:" in javascript
     assert 'api("/v1/events"' in javascript
-    assert 'api("/v1/suggestions' in javascript
+    assert "api(`/v1/suggestions" in javascript
     assert "api(`/v1/audit" in javascript
 
 
@@ -95,14 +95,33 @@ def test_suggestion_filters_cover_lifecycle_statuses_and_show_counts():
     html = (STATIC / "index.html").read_text()
     javascript = javascript_source()
 
-    for status in ("all", "accepted", "rejected"):
+    for status in ("all", "ready", "review", "suppressed", "accepted", "rejected"):
         assert f'data-status="{status}"' in html
-    for status in ("ready", "review", "suppressed"):
-        assert f'data-status="{status}"' not in html
-    assert html.count('class="filter-count"') == 3
-    assert "String(item.status).toLowerCase() === suggestionFilter" in javascript
+    assert html.count('class="filter-count"') == 6
+    assert 'query.set("status", suggestionFilter)' in javascript
     assert 'button.querySelector(".filter-count").textContent' in javascript
     assert 'class="suggestion-decision-actions"' in javascript
+
+
+def test_suggestions_support_correlation_search_and_pagination():
+    html = (STATIC / "index.html").read_text()
+    javascript = javascript_source()
+
+    for element_id in (
+        'id="suggestion-filter-form"',
+        'id="suggestion-correlation"',
+        'id="suggestion-page-size"',
+        'id="suggestion-pagination"',
+        'id="suggestion-previous"',
+        'id="suggestion-next"',
+        'id="suggestion-page-summary"',
+    ):
+        assert element_id in html
+    assert 'query.set("correlation_id", correlationId)' in javascript
+    assert "function renderSuggestionPage()" in javascript
+    assert 'offset: String((suggestionPage - 1) * pageSize)' in javascript
+    assert 'response.headers.get("X-Total-Count")' in javascript
+    assert "item.correlation_id" in javascript
 
 
 def test_decision_model_renders_live_confidence_classifications():

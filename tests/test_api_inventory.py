@@ -53,6 +53,13 @@ def test_audit_contract_exposes_database_filter_parameters():
     assert {"environment", "from_time", "to_time", "correlation_id"} <= parameter_names
 
 
+def test_suggestion_contract_exposes_correlation_and_limit_filters():
+    operation = app.openapi()["paths"]["/v1/suggestions"]["get"]
+    parameter_names = {parameter["name"] for parameter in operation["parameters"]}
+
+    assert {"event_id", "correlation_id", "limit", "offset", "status"} <= parameter_names
+
+
 def test_operation_ids_are_unique():
     operations = []
     for path, methods in app.openapi()["paths"].items():
