@@ -32,6 +32,16 @@ def create_application(api_profile: str | None = None) -> FastAPI:
         version=get_settings().app_version,
         lifespan=lifespan,
     )
+
+    @application.middleware("http")
+    async def prevent_stale_ui_contract(request, call_next):
+        """Ensure browsers do not retain an older UI bundle or OpenAPI contract."""
+        response = await call_next(request)
+        if request.url.path.startswith("/ui") or request.url.path in {"/docs", "/openapi.json"}:
+            response.headers["Cache-Control"] = "no-store, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+        return response
+
     application.include_router(operations_router)
     if profile in {"integration", "full"}:
         application.include_router(integration_router)

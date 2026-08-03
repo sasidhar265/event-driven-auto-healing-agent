@@ -65,7 +65,7 @@ async function loadApis() {
   container.className = "api-list empty-state";
   container.textContent = "Loading the active OpenAPI contract…";
   try {
-    const contract = await api("/openapi.json");
+    const contract = await api("/openapi.json", {cache: "no-store"});
     const endpoints = Object.entries(contract.paths || {})
       .flatMap(([path, operations]) => Object.entries(operations)
         .filter(([method]) => ["get", "post", "put", "patch", "delete"].includes(method))

@@ -34,7 +34,7 @@ def test_api_explorer_uses_the_live_openapi_contract():
     assert 'data-view="api-explorer"' in html
     assert 'id="api-list"' in html
     assert 'id="swagger-link"' in html
-    assert 'api("/openapi.json")' in javascript
+    assert 'api("/openapi.json", {cache: "no-store"})' in javascript
     assert '.filter(([path]) => path.startsWith("/v1/art/"))' not in javascript
     assert "left.path.localeCompare(right.path)" in javascript
     assert '"GET /v1/art/agent-runs"' in javascript
