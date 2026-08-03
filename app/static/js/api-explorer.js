@@ -67,6 +67,7 @@ async function loadApis() {
   try {
     const contract = await api("/openapi.json", {cache: "no-store"});
     const endpoints = Object.entries(contract.paths || {})
+      .filter(([path]) => path.startsWith("/v1/art/"))
       .flatMap(([path, operations]) => Object.entries(operations)
         .filter(([method]) => ["get", "post", "put", "patch", "delete"].includes(method))
         .map(([method, operation]) => ({path, method, operation}))
@@ -91,7 +92,7 @@ async function loadApis() {
         </div>
         <span class="category">${escapeHtml((operation.tags || ["Operations"])[0])}</span>
       </article>`;
-    }).join("") : `<div class="empty-state">No APIs are exposed in this profile.</div>`;
+    }).join("") : `<div class="empty-state">No ART lifecycle APIs are exposed in this profile.</div>`;
   } catch (error) {
     container.className = "api-list empty-state";
     container.textContent = `Unable to load APIs: ${error.message}`;
